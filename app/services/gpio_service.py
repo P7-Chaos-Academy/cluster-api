@@ -105,10 +105,10 @@ class GPIOService:
         """Select the first GPIO backend that can be successfully initialized."""
         backend_initializers = []
 
-        if RPi_GPIO:
-            backend_initializers.append(self._initialize_rpi_gpio)
         if lgpio:
             backend_initializers.append(self._initialize_lgpio)
+        if RPi_GPIO:
+            backend_initializers.append(self._initialize_rpi_gpio)
 
         for initializer in backend_initializers:
             try:

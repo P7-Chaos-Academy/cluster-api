@@ -234,3 +234,4 @@ docker-compose.override.yml
 # Database files
 *.db
 *.sqlite3
+AGENTS.md

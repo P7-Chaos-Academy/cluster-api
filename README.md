@@ -11,6 +11,7 @@ A professionally structured REST API for creating and managing Kubernetes jobs w
 - **Configuration Management**: Environment-based configuration
 - **Kubernetes Integration**: Support for both in-cluster and external kubeconfig
 - **Professional Structure**: Follows Flask best practices
+- **GPIO Hardware Support**: Dual backend (RPi.GPIO or lgpio) automatically selects the best driver on Raspberry Pi hardware
 
 ## 📁 Project Structure
 
@@ -164,6 +165,49 @@ The API automatically detects its environment:
 - **Inside cluster**: Uses service account token
 
 ### 3. **Raspberry Pi / Edge Deployment**
+Perfect for edge computing scenarios like Raspberry Pi and Jetson devices. Follow the GPIO guidance below before invoking hardware endpoints.
+
+## 🧲 GPIO Node Activation
+
+The API exposes `POST /api/v1/nodes/<pin>` to pulse a Raspberry Pi GPIO pin for 0.3 seconds. Hardware access now supports both the legacy `RPi.GPIO` driver and the newer `lgpio` bindings, letting the service run on Raspberry Pi 5 kernels that only provide `/dev/gpiochip*`.
+
+### Runtime dependencies
+- Python wheel `lgpio` (added to `requirements.txt`) — supplies libgpiod bindings.
+- Optional: `RPi.GPIO` remains installed for backwards compatibility when gpiomem is available.
+
+### Host preparation checklist
+1. **Kernel**: Use the Raspberry Pi Foundation kernel or any build that exposes `/dev/gpiomem0` and `/dev/gpiochip0`.
+2. **Symlink**: Ensure `/dev/gpiomem` points to `/dev/gpiomem0` (e.g. `sudo ln -sf /dev/gpiomem0 /dev/gpiomem`).
+3. **Permissions**: Add the provided udev rules (or equivalent) so the container user can access the gpio group.
+
+### Kubernetes deployment hints
+- Mount the required device nodes into the pod:
+  ```yaml
+        volumeMounts:
+          - name: gpiochip0
+            mountPath: /dev/gpiochip0
+          - name: gpiomem
+            mountPath: /dev/gpiomem
+          - name: devicetree
+            mountPath: /proc/device-tree
+            readOnly: true
+      volumes:
+        - name: gpiochip0
+          hostPath:
+            path: /dev/gpiochip0
+            type: CharDevice
+        - name: gpiomem
+          hostPath:
+            path: /dev/gpiomem
+            type: CharDevice
+        - name: devicetree
+          hostPath:
+            path: /proc/device-tree
+            type: Directory
+  ```
+- The service automatically prefers `lgpio` and falls back to `RPi.GPIO` if it fails; check the startup log for `Using lgpio backend for GPIO operations.`
+- If the endpoint returns 503, confirm the pod can see `/dev/gpiomem` and `/proc/device-tree`, then redeploy after fixing the mounts.
+
 Perfect for edge computing scenarios like your Jetson setup:
 
 ```bash

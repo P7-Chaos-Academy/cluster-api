@@ -4,3 +4,5 @@ kubernetes==27.2.0
 PyYAML==6.0.1
 Werkzeug==2.3.7
 marshmallow==3.20.1
+RPi.GPIO==0.7.1; platform_machine == "arm" or platform_machine == "armv7l" or platform_machine == "aarch64"
+lgpio>=0.2.2; platform_machine == "arm" or platform_machine == "armv7l" or platform_machine == "aarch64"

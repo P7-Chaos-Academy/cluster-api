@@ -4,6 +4,7 @@ from flask_restx import Api
 
 from app.config.config import get_config
 from app.controllers.job_controller import api as jobs_api
+from app.controllers.nodes_controller import api as nodes_api
 
 
 def create_app():
@@ -30,6 +31,7 @@ def create_app():
     
     # Register namespaces
     api.add_namespace(jobs_api, path='/jobs')
+    api.add_namespace(nodes_api, path='/nodes')
     
     # Health check endpoint
     @app.route('/')

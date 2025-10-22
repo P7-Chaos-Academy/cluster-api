@@ -1,10 +1,14 @@
 """Nodes controller handling GPIO interactions."""
 import logging
+from flask import request
 from flask_restx import Namespace, Resource, fields
 
+from app.config.config import get_config
 from app.services.gpio_service import gpio_service
+from app.services.shutdown_service import shutdown_service
 
 logger = logging.getLogger(__name__)
+config = get_config()
 
 api = Namespace('nodes', description='GPIO node operations')
 
@@ -42,3 +46,24 @@ class NodeActivation(Resource):
         except Exception as err:
             logger.exception(f"Failed to activate GPIO pin {pin}: {err}")
             api.abort(500, error='Failed to activate GPIO pin')
+
+@api.route('/shutdown/<string:host>/<string:address>')
+class NodeShutdown(Resource):
+    """Controller for shutting down a server via SSH."""
+
+    @api.doc('shutdown_node', description='Send a remote shutdown command over SSH')
+    @api.marshal_with(node_response_model)
+    @api.response(200, 'Server shutdown initiated', node_response_model)
+    @api.response(400, 'Invalid request', error_model)
+    @api.response(500, 'Internal server error', error_model)
+    def post(self, host: str, address: str):
+        """Shutdown the server at the specified host."""
+        try:
+            shutdown_service.shutdown(host_label=host, address=address)
+            return {'status': 'ok', 'pin': None}
+        except ValueError as err:
+            logger.error("Invalid shutdown request: %s", err)
+            api.abort(400, error=str(err))
+        except Exception as err:
+            logger.exception("Failed to shutdown server at %s: %s", host, err)
+            api.abort(500, error='Failed to shutdown server')

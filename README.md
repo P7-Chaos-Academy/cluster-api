@@ -250,6 +250,8 @@ Configure the API using environment variables:
 | `PORT` | `5000` | Port to listen on |
 | `DEFAULT_NAMESPACE` | `default` | Default Kubernetes namespace |
 | `LOG_LEVEL` | `INFO` | Logging level |
+| `SHUTDOWN_USERNAME` | `None` | Default SSH username for GPIO shutdown requests |
+| `SHUTDOWN_COMMAND` | `sudo shutdown now` | Remote command executed during shutdown |
 
 ## 📝 Usage Examples
 

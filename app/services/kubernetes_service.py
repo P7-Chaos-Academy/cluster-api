@@ -5,7 +5,7 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import uuid
 
-from app.models.job import JobCreateRequest
+from app.models.job import JobCreateRequest, JobResponse, JobStatusResponse, JobListResponse
 from app.config.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ class KubernetesService:
             
             logger.info(f"Created job {job_request.name} in namespace {namespace}")
             
-            return Dict(
+            return JobResponse(
                 status="success",
                 job_name=response.metadata.name,
                 namespace=response.metadata.namespace,

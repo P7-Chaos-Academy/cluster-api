@@ -2,12 +2,15 @@
 
 import os
 import logging
-from typing import Dict, List, Optional
+from typing import Dict
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import uuid
 
-from app.models.job import JobCreateRequest, JobResponse, JobStatusResponse, JobListResponse
+from app.models.job import (
+    JobCreateRequest,
+    JobResponse,
+)
 from app.config.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -25,7 +28,7 @@ class KubernetesService:
     def _init_kubernetes_client(self):
         """Initialize Kubernetes client based on environment."""
         try:
-            if os.getenv('KUBERNETES_SERVICE_HOST'):
+            if os.getenv("KUBERNETES_SERVICE_HOST"):
                 # Running inside cluster
                 config.load_incluster_config()
                 logger.info("Loaded in-cluster Kubernetes configuration")
@@ -52,10 +55,10 @@ class KubernetesService:
         import json
 
         json_str = json.dumps(json_data).replace('"', '\\"')
-        
+
         return (
-            'curl --request POST '
-            '--url http://$HOST_IP:8080/completion '
+            "curl --request POST "
+            "--url http://$HOST_IP:8080/completion "
             '--header "Content-Type: application/json" '
             f'--data "{json_str}"'
         )
@@ -63,14 +66,12 @@ class KubernetesService:
     def _build_container_spec(self, job_request: JobCreateRequest) -> Dict:
         """Build the container specification."""
         container_name = str(uuid.uuid4())[:8]
-        
+
         return {
             "name": container_name,
             "image": "curlimages/curl:8.9.1",
-            "env": [
-                {"name": "PROMPT", "value": job_request.prompt}
-            ],
-            "command": ["sh", "-c", self._build_llama_curl_command(job_request)]
+            "env": [{"name": "PROMPT", "value": job_request.prompt}],
+            "command": ["sh", "-c", self._build_llama_curl_command(job_request)],
         }
 
     def _build_pod_spec(self, job_request: JobCreateRequest) -> Dict:
@@ -79,18 +80,18 @@ class KubernetesService:
             "schedulerName": "llama-scheduler",
             "hostNetwork": True,
             "restartPolicy": "Never",
-            "containers": [self._build_container_spec(job_request)]
+            "containers": [self._build_container_spec(job_request)],
         }
-        
+
         if job_request.node_selector:
             pod_spec["nodeSelector"] = job_request.node_selector
-        
+
         return pod_spec
 
     def _build_job_manifest(self, job_request: JobCreateRequest) -> Dict:
         """Build the complete job manifest."""
         labels = job_request.labels or {"app": job_request.name}
-        
+
         return {
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -98,10 +99,10 @@ class KubernetesService:
             "spec": {
                 "template": {
                     "metadata": {"labels": labels},
-                    "spec": self._build_pod_spec(job_request)
+                    "spec": self._build_pod_spec(job_request),
                 },
-                "backoffLimit": job_request.backoff_limit
-            }
+                "backoffLimit": job_request.backoff_limit,
+            },
         }
 
     def create_job(self, job_request: JobCreateRequest) -> Dict:
@@ -114,18 +115,17 @@ class KubernetesService:
 
         try:
             response = self.batch_v1.create_namespaced_job(
-                body=job_manifest,
-                namespace=namespace
+                body=job_manifest, namespace=namespace
             )
-            
+
             logger.info(f"Created job {job_request.name} in namespace {namespace}")
-            
+
             return JobResponse(
                 status="success",
                 job_name=response.metadata.name,
                 namespace=response.metadata.namespace,
                 uid=response.metadata.uid,
-                creation_timestamp=response.metadata.creation_timestamp.isoformat()
+                creation_timestamp=response.metadata.creation_timestamp.isoformat(),
             )
         except ApiException as e:
             logger.error(f"Failed to create job {job_request.name}: {e}")
@@ -135,6 +135,7 @@ class KubernetesService:
                     "Use a different name or delete the existing job first."
                 )
             raise Exception(f"Kubernetes API error: {e.reason}")
+
 
 # Global service instance
 kubernetes_service = KubernetesService()

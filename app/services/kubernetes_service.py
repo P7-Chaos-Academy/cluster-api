@@ -2,7 +2,7 @@
 
 import os
 import logging
-from typing import Dict
+from typing import Dict, Optional
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import uuid

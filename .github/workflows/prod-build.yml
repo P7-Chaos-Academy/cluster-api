@@ -52,19 +52,19 @@ jobs:
           echo "Pushed images: ${{ secrets.DOCKER_USERNAME }}/cluster-api:${{ steps.image-tag.outputs.tag }} and ${{ secrets.DOCKER_USERNAME }}/cluster-api:latest"
 
       # Optionally update downstream manifests (commented out)
-      # - name: Checkout devops repository
-      #   uses: actions/checkout@v2
-      #   with:
-      #     repository: P7-Chaos-Academy/devops
-      #     token: ${{ secrets.DEVOPS_REPO_TOKEN }}
-      #     path: devops-repo
+      - name: Checkout devops repository
+        uses: actions/checkout@v2
+        with:
+          repository: P7-Chaos-Academy/gitops
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
+          path: devops-repo
 
-      # - name: Update Kubernetes manifest
-      #   run: |
-      #     cd devops-repo
-      #     sed -i "s|image: cgamel/cluster-api:.*|image: ${{ steps.image-tag.outputs.full_image }}|g" cluster/cluster-deployment.yaml
-      #     git config --global user.email "action@github.com"
-      #     git config --global user.name "GitHub Action"
-      #     git add cluster/cluster-deployment.yaml
-      #     git commit -m "Update cluster image to ${{ steps.image-tag.outputs.tag }}"
-      #     git push
+      - name: Update Kubernetes manifest
+        run: |
+          cd devops-repo
+          sed -i "s|image: cgamel/cluster-api:.*|image: ${{ steps.image-tag.outputs.full_image }}|g" cluster/cluster-deployment.yaml
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git add cluster/cluster-deployment.yaml
+          git commit -m "Update cluster image to ${{ steps.image-tag.outputs.tag }}"
+          git push

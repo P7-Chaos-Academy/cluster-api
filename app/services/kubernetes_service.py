@@ -54,13 +54,13 @@ class KubernetesService:
             "ignore_eos": True,
             "temperature": job_request.temperature,
         }
-        
+
         json_str = json.dumps(json_data)
-        
+
         return (
             f"curl --request POST "
             f"--url http://$HOST_IP:8080/completion "
-            f"--header \"Content-Type: application/json\" "
+            f'--header "Content-Type: application/json" '
             f"--data '{json_str}'"
         )
 
@@ -72,20 +72,13 @@ class KubernetesService:
             "name": container_name,
             "image": "curlimages/curl:8.9.1",
             "env": [
-                {
-                    "name": "PROMPT",
-                    "value": job_request.prompt
-                },
+                {"name": "PROMPT", "value": job_request.prompt},
                 {
                     "name": "HOST_IP",
-                    "valueFrom": {
-                        "fieldRef": {
-                            "fieldPath": "status.hostIP"
-                        }
-                    }
-                }
+                    "valueFrom": {"fieldRef": {"fieldPath": "status.hostIP"}},
+                },
             ],
-            "command": ["sh", "-c", self._build_llama_curl_command(job_request)]
+            "command": ["sh", "-c", self._build_llama_curl_command(job_request)],
         }
 
     def _build_pod_spec(self, job_request: JobCreateRequest) -> Dict:
@@ -150,7 +143,9 @@ class KubernetesService:
                 )
             raise Exception(f"Kubernetes API error: {e.reason}")
 
-    def get_job_logs(self, job_name: str, namespace: Optional[str] = None) -> Dict[str, str]:
+    def get_job_logs(
+        self, job_name: str, namespace: Optional[str] = None
+    ) -> Dict[str, str]:
         """Get logs from the pod(s) associated with a job."""
         if not self.core_v1 or not self.batch_v1:
             raise Exception("Kubernetes client not initialized")
@@ -158,12 +153,11 @@ class KubernetesService:
         namespace = namespace or self.config.DEFAULT_NAMESPACE
 
         try:
-            
+
             # Get pods associated with this job
             label_selector = f"job-name={job_name}"
             pods = self.core_v1.list_namespaced_pod(
-                namespace=namespace,
-                label_selector=label_selector
+                namespace=namespace, label_selector=label_selector
             )
 
             if not pods.items:
@@ -172,7 +166,7 @@ class KubernetesService:
                     "namespace": namespace,
                     "status": "no_pods",
                     "message": "No pods found for this job yet",
-                    "logs": ""
+                    "logs": "",
                 }
 
             # Get logs from the first pod (jobs typically have one pod)
@@ -188,7 +182,7 @@ class KubernetesService:
                     "pod_name": pod_name,
                     "status": pod_status.lower(),
                     "message": f"Pod is {pod_status}, logs not yet available",
-                    "logs": ""
+                    "logs": "",
                 }
 
             try:
@@ -196,7 +190,7 @@ class KubernetesService:
                 logs = self.core_v1.read_namespaced_pod_log(
                     name=pod_name,
                     namespace=namespace,
-                    tail_lines=1000  # Limit to last 1000 lines
+                    tail_lines=1000,  # Limit to last 1000 lines
                 )
 
                 return {
@@ -204,7 +198,7 @@ class KubernetesService:
                     "namespace": namespace,
                     "pod_name": pod_name,
                     "status": pod_status.lower(),
-                    "logs": logs
+                    "logs": logs,
                 }
             except ApiException as log_err:
                 if log_err.status == 400:
@@ -215,15 +209,18 @@ class KubernetesService:
                         "pod_name": pod_name,
                         "status": "starting",
                         "message": "Pod containers are still starting",
-                        "logs": ""
+                        "logs": "",
                     }
                 raise
 
         except ApiException as e:
             if e.status == 404:
-                raise Exception(f"Job '{job_name}' not found in namespace '{namespace}'")
+                raise Exception(
+                    f"Job '{job_name}' not found in namespace '{namespace}'"
+                )
             logger.error(f"Failed to get logs for job {job_name}: {e}")
             raise Exception(f"Kubernetes API error: {e.reason}")
+
 
 # Global service instance
 kubernetes_service = KubernetesService()

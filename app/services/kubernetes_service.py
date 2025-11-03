@@ -1,12 +1,17 @@
 """Kubernetes service layer for job operations."""
+
+import os
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import uuid
 import json
 
-from app.models.job import JobCreateRequest, JobResponse, JobStatusResponse, JobListResponse
+from app.models.job import (
+    JobCreateRequest,
+    JobResponse,
+)
 from app.config.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -25,8 +30,7 @@ class KubernetesService:
     def _init_kubernetes_client(self):
         """Initialize Kubernetes client based on environment."""
         try:
-            import os
-            if os.getenv('KUBERNETES_SERVICE_HOST'):
+            if os.getenv("KUBERNETES_SERVICE_HOST"):
                 # Running inside cluster
                 config.load_incluster_config()
                 logger.info("Loaded in-cluster Kubernetes configuration")
@@ -34,7 +38,7 @@ class KubernetesService:
                 # Running outside cluster
                 config.load_kube_config()
                 logger.info("Loaded kubeconfig from local environment")
-            
+
             self.batch_v1 = client.BatchV1Api()
             self.core_v1 = client.CoreV1Api()
         except Exception as e:
@@ -48,40 +52,33 @@ class KubernetesService:
             "prompt": job_request.prompt,
             "n_predict": job_request.n_predict,
             "ignore_eos": True,
-            "temperature": job_request.temperature
+            "temperature": job_request.temperature,
         }
-        
+
         json_str = json.dumps(json_data)
-        
+
         return (
             f"curl --request POST "
             f"--url http://$HOST_IP:8080/completion "
-            f"--header \"Content-Type: application/json\" "
+            f'--header "Content-Type: application/json" '
             f"--data '{json_str}'"
         )
 
     def _build_container_spec(self, job_request: JobCreateRequest) -> Dict:
         """Build the container specification."""
         container_name = str(uuid.uuid4())[:8]
-        
+
         return {
             "name": container_name,
             "image": "curlimages/curl:8.9.1",
             "env": [
-                {
-                    "name": "PROMPT",
-                    "value": job_request.prompt
-                },
+                {"name": "PROMPT", "value": job_request.prompt},
                 {
                     "name": "HOST_IP",
-                    "valueFrom": {
-                        "fieldRef": {
-                            "fieldPath": "status.hostIP"
-                        }
-                    }
-                }
+                    "valueFrom": {"fieldRef": {"fieldPath": "status.hostIP"}},
+                },
             ],
-            "command": ["sh", "-c", self._build_llama_curl_command(job_request)]
+            "command": ["sh", "-c", self._build_llama_curl_command(job_request)],
         }
 
     def _build_pod_spec(self, job_request: JobCreateRequest) -> Dict:
@@ -90,18 +87,18 @@ class KubernetesService:
             "schedulerName": "llama-scheduler",
             "hostNetwork": True,
             "restartPolicy": "Never",
-            "containers": [self._build_container_spec(job_request)]
+            "containers": [self._build_container_spec(job_request)],
         }
-        
+
         if job_request.node_selector:
             pod_spec["nodeSelector"] = job_request.node_selector
-        
+
         return pod_spec
 
     def _build_job_manifest(self, job_request: JobCreateRequest) -> Dict:
         """Build the complete job manifest."""
         labels = job_request.labels or {"app": job_request.name}
-        
+
         return {
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -109,10 +106,10 @@ class KubernetesService:
             "spec": {
                 "template": {
                     "metadata": {"labels": labels},
-                    "spec": self._build_pod_spec(job_request)
+                    "spec": self._build_pod_spec(job_request),
                 },
-                "backoffLimit": job_request.backoff_limit
-            }
+                "backoffLimit": job_request.backoff_limit,
+            },
         }
 
     def create_job(self, job_request: JobCreateRequest) -> Dict:
@@ -125,18 +122,17 @@ class KubernetesService:
 
         try:
             response = self.batch_v1.create_namespaced_job(
-                body=job_manifest,
-                namespace=namespace
+                body=job_manifest, namespace=namespace
             )
-            
+
             logger.info(f"Created job {job_request.name} in namespace {namespace}")
-            
+
             return JobResponse(
                 status="success",
                 job_name=response.metadata.name,
                 namespace=response.metadata.namespace,
                 uid=response.metadata.uid,
-                creation_timestamp=response.metadata.creation_timestamp.isoformat()
+                creation_timestamp=response.metadata.creation_timestamp.isoformat(),
             )
         except ApiException as e:
             logger.error(f"Failed to create job {job_request.name}: {e}")
@@ -147,7 +143,9 @@ class KubernetesService:
                 )
             raise Exception(f"Kubernetes API error: {e.reason}")
 
-    def get_job_logs(self, job_name: str, namespace: Optional[str] = None) -> Dict[str, str]:
+    def get_job_logs(
+        self, job_name: str, namespace: Optional[str] = None
+    ) -> Dict[str, str]:
         """Get logs from the pod(s) associated with a job."""
         if not self.core_v1 or not self.batch_v1:
             raise Exception("Kubernetes client not initialized")
@@ -155,14 +153,11 @@ class KubernetesService:
         namespace = namespace or self.config.DEFAULT_NAMESPACE
 
         try:
-            # First, verify the job exists
-            job = self.batch_v1.read_namespaced_job(name=job_name, namespace=namespace)
-            
+
             # Get pods associated with this job
             label_selector = f"job-name={job_name}"
             pods = self.core_v1.list_namespaced_pod(
-                namespace=namespace,
-                label_selector=label_selector
+                namespace=namespace, label_selector=label_selector
             )
 
             if not pods.items:
@@ -171,7 +166,7 @@ class KubernetesService:
                     "namespace": namespace,
                     "status": "no_pods",
                     "message": "No pods found for this job yet",
-                    "logs": ""
+                    "logs": "",
                 }
 
             # Get logs from the first pod (jobs typically have one pod)
@@ -187,7 +182,7 @@ class KubernetesService:
                     "pod_name": pod_name,
                     "status": pod_status.lower(),
                     "message": f"Pod is {pod_status}, logs not yet available",
-                    "logs": ""
+                    "logs": "",
                 }
 
             try:
@@ -195,7 +190,7 @@ class KubernetesService:
                 logs = self.core_v1.read_namespaced_pod_log(
                     name=pod_name,
                     namespace=namespace,
-                    tail_lines=1000  # Limit to last 1000 lines
+                    tail_lines=1000,  # Limit to last 1000 lines
                 )
 
                 return {
@@ -203,7 +198,7 @@ class KubernetesService:
                     "namespace": namespace,
                     "pod_name": pod_name,
                     "status": pod_status.lower(),
-                    "logs": logs
+                    "logs": logs,
                 }
             except ApiException as log_err:
                 if log_err.status == 400:
@@ -214,15 +209,18 @@ class KubernetesService:
                         "pod_name": pod_name,
                         "status": "starting",
                         "message": "Pod containers are still starting",
-                        "logs": ""
+                        "logs": "",
                     }
                 raise
 
         except ApiException as e:
             if e.status == 404:
-                raise Exception(f"Job '{job_name}' not found in namespace '{namespace}'")
+                raise Exception(
+                    f"Job '{job_name}' not found in namespace '{namespace}'"
+                )
             logger.error(f"Failed to get logs for job {job_name}: {e}")
             raise Exception(f"Kubernetes API error: {e.reason}")
+
 
 # Global service instance
 kubernetes_service = KubernetesService()

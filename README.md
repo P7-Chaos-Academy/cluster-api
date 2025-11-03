@@ -62,14 +62,50 @@ docker run -d \
 # Install dependencies
 pip install -r requirements.txt
 
+# Or use make command
+make install
+
 # Run the application
 python run.py
+
+# Or use make command
+make run
 ```
 
 ### Option 3: Development with Docker
 ```bash
 # Run development mode with live reload
 docker-compose --profile dev up -d k8s-job-api-dev
+```
+
+## 🚀 Quick Commands (Makefile)
+
+This project includes a Makefile with convenient shortcuts similar to npm scripts:
+
+```bash
+make help           # Show all available commands
+make install        # Install dependencies (pip install -r requirements.txt)
+make run            # Run the application
+make test           # Run tests
+make lint           # Check Python syntax
+make clean          # Clean up cache files
+make docker-build   # Build Docker image
+make docker-run     # Run Docker container
+make check          # Quick syntax validation
+```
+
+**Example usage:**
+```bash
+# Install dependencies and run
+make install
+make run
+
+# Quick syntax check before pushing
+make check
+
+# Build and run with Docker
+make docker-build
+make docker-run
 ```
 
 ## 🏃 Access the Application

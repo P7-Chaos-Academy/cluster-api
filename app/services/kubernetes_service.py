@@ -5,7 +5,7 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import uuid
 
-from app.models.job import JobCreateRequest, JobResponse
+from app.models.job import JobCreateRequest
 from app.config.config import get_config
 
 logger = logging.getLogger(__name__)

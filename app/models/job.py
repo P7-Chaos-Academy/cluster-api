@@ -1,7 +1,5 @@
 """Data models for API requests and responses."""
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Union
-import re
 
 
 @dataclass

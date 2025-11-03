@@ -102,7 +102,7 @@ class KubernetesService:
             }
         }
 
-    def create_job(self, job_request: JobCreateRequest) -> JobResponse:
+    def create_job(self, job_request: JobCreateRequest) -> Dict:
         """Create a Kubernetes job."""
         if not self.batch_v1:
             raise Exception("Kubernetes client not initialized")
@@ -118,7 +118,7 @@ class KubernetesService:
             
             logger.info(f"Created job {job_request.name} in namespace {namespace}")
             
-            return JobResponse(
+            return Dict(
                 status="success",
                 job_name=response.metadata.name,
                 namespace=response.metadata.namespace,

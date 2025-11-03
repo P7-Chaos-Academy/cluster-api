@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import uuid
+import json
 
 from app.models.job import JobCreateRequest, JobResponse, JobStatusResponse, JobListResponse
 from app.config.config import get_config
@@ -42,8 +43,7 @@ class KubernetesService:
 
     def _build_llama_curl_command(self, job_request: JobCreateRequest) -> str:
         """Build the curl command for LLaMA completion request."""
-        import json
-        
+
         json_data = {
             "prompt": job_request.prompt,
             "n_predict": job_request.n_predict,

@@ -42,6 +42,8 @@ class KubernetesService:
 
     def _build_llama_curl_command(self, job_request: JobCreateRequest) -> str:
         """Build the curl command for LLaMA completion request."""
+        import json
+        
         json_data = {
             "prompt": job_request.prompt,
             "n_predict": job_request.n_predict,
@@ -49,15 +51,13 @@ class KubernetesService:
             "temperature": job_request.temperature
         }
         
-        # Escape quotes in JSON for shell command
-        import json
-        json_str = json.dumps(json_data).replace('"', '\\"')
+        json_str = json.dumps(json_data)
         
         return (
-            'curl --request POST '
-            '--url http://$HOST_IP:8080/completion '
-            '--header "Content-Type: application/json" '
-            f'--data "{json_str}"'
+            f"curl --request POST "
+            f"--url http://$HOST_IP:8080/completion "
+            f"--header \"Content-Type: application/json\" "
+            f"--data '{json_str}'"
         )
 
     def _build_container_spec(self, job_request: JobCreateRequest) -> Dict:

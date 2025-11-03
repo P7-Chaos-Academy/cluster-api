@@ -21,6 +21,18 @@ job_create_model = api.model('JobCreate', {
     'temperature': fields.Float(description='Sampling temperature (How hot tempered the clanker will be) (will default to 0)', example=0.7),
 })
 
+job_response_model = api.model('JobResponse', {
+    'status': fields.String(description='Status of the operation', example='success'),
+    'job_name': fields.String(description='Name of the created job', example='llama-job-abc123'),
+    'namespace': fields.String(description='Kubernetes namespace', example='default'),
+    'uid': fields.String(description='Unique identifier', example='550e8400-e29b-41d4-a716-446655440000'),
+    'creation_timestamp': fields.String(description='Creation timestamp', example='2025-11-03T12:00:00Z')
+})
+
+error_model = api.model('Error', {
+    'error': fields.String(description='Error message', example='Invalid request')
+})
+
 @api.route('/')
 class JobList(Resource):
     """Job list operations."""

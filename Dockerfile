@@ -10,10 +10,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies required for building GPIO bindings
+# Install system dependencies required for building GPIO bindings + SSH client
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
+    openssh-client \
  && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching

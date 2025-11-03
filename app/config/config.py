@@ -21,6 +21,10 @@ class Config:
     API_TITLE = 'Kubernetes Job API'
     API_VERSION = '1.0.0'
     API_DESCRIPTION = 'REST API for creating and managing Kubernetes jobs'
+
+    # Remote shutdown settings
+    SHUTDOWN_USERNAME = os.getenv('SHUTDOWN_USERNAME')
+    SHUTDOWN_COMMAND = os.getenv('SHUTDOWN_COMMAND', 'sudo shutdown now')
     
     @classmethod
     def init_logging(cls):

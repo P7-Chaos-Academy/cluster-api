@@ -12,7 +12,7 @@ class Config:
     PORT = int(os.getenv('PORT', '5000'))
     
     # Kubernetes settings
-    DEFAULT_NAMESPACE = os.getenv('DEFAULT_NAMESPACE', 'default')
+    DEFAULT_NAMESPACE = os.getenv('DEFAULT_NAMESPACE', 'prompts')
     
     # Logging settings
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()

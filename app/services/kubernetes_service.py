@@ -17,6 +17,7 @@ class KubernetesService:
     def __init__(self):
         """Initialize the Kubernetes service."""
         self.batch_v1 = None
+        self.core_v1 = None
         self.config = get_config()
         self._init_kubernetes_client()
 
@@ -34,6 +35,7 @@ class KubernetesService:
                 logger.info("Loaded kubeconfig from local environment")
             
             self.batch_v1 = client.BatchV1Api()
+            self.core_v1 = client.CoreV1Api()
         except Exception as e:
             logger.error(f"Failed to initialize Kubernetes client: {e}")
             raise
@@ -132,6 +134,83 @@ class KubernetesService:
                     f"Job '{job_request.name}' already exists in namespace '{namespace}'. "
                     "Use a different name or delete the existing job first."
                 )
+            raise Exception(f"Kubernetes API error: {e.reason}")
+
+    def get_job_logs(self, job_name: str, namespace: Optional[str] = None) -> Dict[str, str]:
+        """Get logs from the pod(s) associated with a job."""
+        if not self.core_v1 or not self.batch_v1:
+            raise Exception("Kubernetes client not initialized")
+
+        namespace = namespace or self.config.DEFAULT_NAMESPACE
+
+        try:
+            # First, verify the job exists
+            job = self.batch_v1.read_namespaced_job(name=job_name, namespace=namespace)
+            
+            # Get pods associated with this job
+            label_selector = f"job-name={job_name}"
+            pods = self.core_v1.list_namespaced_pod(
+                namespace=namespace,
+                label_selector=label_selector
+            )
+
+            if not pods.items:
+                return {
+                    "job_name": job_name,
+                    "namespace": namespace,
+                    "status": "no_pods",
+                    "message": "No pods found for this job yet",
+                    "logs": ""
+                }
+
+            # Get logs from the first pod (jobs typically have one pod)
+            pod = pods.items[0]
+            pod_name = pod.metadata.name
+            pod_status = pod.status.phase
+
+            # Check if pod has completed or is running
+            if pod_status in ["Pending", "Unknown"]:
+                return {
+                    "job_name": job_name,
+                    "namespace": namespace,
+                    "pod_name": pod_name,
+                    "status": pod_status.lower(),
+                    "message": f"Pod is {pod_status}, logs not yet available",
+                    "logs": ""
+                }
+
+            try:
+                # Get logs from the pod
+                logs = self.core_v1.read_namespaced_pod_log(
+                    name=pod_name,
+                    namespace=namespace,
+                    tail_lines=1000  # Limit to last 1000 lines
+                )
+
+                return {
+                    "job_name": job_name,
+                    "namespace": namespace,
+                    "pod_name": pod_name,
+                    "status": pod_status.lower(),
+                    "logs": logs
+                }
+            except ApiException as log_err:
+                if log_err.status == 400:
+                    # Pod exists but containers haven't started yet
+                    return {
+                        "job_name": job_name,
+                        "namespace": namespace,
+                        "pod_name": pod_name,
+                        "status": "starting",
+                        "message": "Pod containers are still starting",
+                        "logs": ""
+                    }
+                raise
+
+        except ApiException as e:
+            if e.status == 404:
+                raise Exception(f"Job '{job_name}' not found in namespace '{namespace}'")
+            logger.error(f"Failed to get logs for job {job_name}: {e}")
             raise Exception(f"Kubernetes API error: {e.reason}")
 
 # Global service instance

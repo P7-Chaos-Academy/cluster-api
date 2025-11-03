@@ -33,6 +33,15 @@ error_model = api.model('Error', {
     'error': fields.String(description='Error message', example='Invalid request')
 })
 
+job_logs_model = api.model('JobLogs', {
+    'job_name': fields.String(description='Name of the job', example='llama-job-abc123'),
+    'namespace': fields.String(description='Kubernetes namespace', example='prompts'),
+    'pod_name': fields.String(description='Pod name', example='llama-job-abc123-xyz12'),
+    'status': fields.String(description='Pod status', example='succeeded'),
+    'logs': fields.String(description='Job output logs', example='{"content": "Hello from LLaMA!"}'),
+    'message': fields.String(description='Status message', example='')
+})
+
 @api.route('/')
 class JobList(Resource):
     """Job list operations."""
@@ -62,4 +71,26 @@ class JobList(Resource):
             api.abort(400, error=str(e))
         except Exception as e:
             logger.error(f"Error creating job: {e}")
+            api.abort(500, error=str(e))
+
+
+@api.route('/<string:job_name>/logs')
+@api.param('job_name', 'The job name')
+class JobLogs(Resource):
+    """Job logs operations."""
+    @api.doc('get_job_logs')
+    @api.marshal_with(job_logs_model, code=200)
+    @api.response(404, 'Job not found', error_model)
+    @api.response(500, 'Internal server error', error_model)
+    def get(self, job_name):
+        """Get logs/output from a Kubernetes job."""
+        try:
+            namespace = request.args.get('namespace', config.DEFAULT_NAMESPACE)
+            result = kubernetes_service.get_job_logs(job_name, namespace)
+            return result, 200
+
+        except Exception as e:
+            logger.error(f"Error getting job logs: {e}")
+            if "not found" in str(e).lower():
+                api.abort(404, error=str(e))
             api.abort(500, error=str(e))

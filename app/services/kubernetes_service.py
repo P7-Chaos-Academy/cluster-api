@@ -1,5 +1,6 @@
 """Kubernetes service layer for job operations."""
 
+import os
 import logging
 from typing import Dict, List, Optional
 from kubernetes import client, config
@@ -24,8 +25,6 @@ class KubernetesService:
     def _init_kubernetes_client(self):
         """Initialize Kubernetes client based on environment."""
         try:
-            import os
-
             if os.getenv('KUBERNETES_SERVICE_HOST'):
                 # Running inside cluster
                 config.load_incluster_config()
@@ -51,7 +50,7 @@ class KubernetesService:
 
         # Escape quotes in JSON for shell command
         import json
-        
+
         json_str = json.dumps(json_data).replace('"', '\\"')
         
         return (

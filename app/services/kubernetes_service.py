@@ -158,8 +158,6 @@ class KubernetesService:
         namespace = namespace or self.config.DEFAULT_NAMESPACE
 
         try:
-            # First, verify the job exists
-            job = self.batch_v1.read_namespaced_job(name=job_name, namespace=namespace)
             
             # Get pods associated with this job
             label_selector = f"job-name={job_name}"

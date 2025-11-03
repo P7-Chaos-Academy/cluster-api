@@ -1,4 +1,5 @@
 """Job controller with Flask-RESTX for API documentation."""
+
 import logging
 from flask import request
 from flask_restx import Namespace, Resource, fields
@@ -15,11 +16,20 @@ config = get_config()
 api = Namespace('jobs', description='Kubernetes job operations')
 
 # Define API models for Swagger documentation
-job_create_model = api.model('JobCreate', {
-    'prompt': fields.String(description='Prompt to ask the LLM', example='Hello world!'),
-    'n_predict': fields.Integer(description='Number of tokens to predict (will default to 128)', example=128),
-    'temperature': fields.Float(description='Sampling temperature (How hot tempered the clanker will be) (will default to 0)', example=0.7),
-})
+job_create_model = api.model(
+    'JobCreate', 
+    {
+        'prompt': fields.String(
+            description='Prompt to ask the LLM', example='Hello world!'
+        ),
+        'n_predict': fields.Integer(
+            description='Number of tokens to predict (will default to 128)', example=128
+        ),
+        'temperature': fields.Float(description='Sampling temperature (How hot tempered the clanker will be) (will default to 0)',
+            example=0.7
+        ),
+    },
+)
 
 @api.route('/')
 class JobList(Resource):

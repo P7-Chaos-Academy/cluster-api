@@ -6,6 +6,7 @@ from typing import Dict, Optional
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import uuid
+import json
 
 from app.models.job import (
     JobCreateRequest,
@@ -46,23 +47,21 @@ class KubernetesService:
 
     def _build_llama_curl_command(self, job_request: JobCreateRequest) -> str:
         """Build the curl command for LLaMA completion request."""
+
         json_data = {
             "prompt": job_request.prompt,
             "n_predict": job_request.n_predict,
             "ignore_eos": True,
             "temperature": job_request.temperature,
         }
-
-        # Escape quotes in JSON for shell command
-        import json
-
-        json_str = json.dumps(json_data).replace('"', '\\"')
-
+        
+        json_str = json.dumps(json_data)
+        
         return (
-            "curl --request POST "
-            "--url http://$HOST_IP:8080/completion "
-            '--header "Content-Type: application/json" '
-            f'--data "{json_str}"'
+            f"curl --request POST "
+            f"--url http://$HOST_IP:8080/completion "
+            f"--header \"Content-Type: application/json\" "
+            f"--data '{json_str}'"
         )
 
     def _build_container_spec(self, job_request: JobCreateRequest) -> Dict:
@@ -72,8 +71,21 @@ class KubernetesService:
         return {
             "name": container_name,
             "image": "curlimages/curl:8.9.1",
-            "env": [{"name": "PROMPT", "value": job_request.prompt}],
-            "command": ["sh", "-c", self._build_llama_curl_command(job_request)],
+            "env": [
+                {
+                    "name": "PROMPT",
+                    "value": job_request.prompt
+                },
+                {
+                    "name": "HOST_IP",
+                    "valueFrom": {
+                        "fieldRef": {
+                            "fieldPath": "status.hostIP"
+                        }
+                    }
+                }
+            ],
+            "command": ["sh", "-c", self._build_llama_curl_command(job_request)]
         }
 
     def _build_pod_spec(self, job_request: JobCreateRequest) -> Dict:

@@ -1,4 +1,5 @@
 """Kubernetes service layer for job operations."""
+
 import logging
 from typing import Dict, List, Optional
 from kubernetes import client, config
@@ -24,6 +25,7 @@ class KubernetesService:
         """Initialize Kubernetes client based on environment."""
         try:
             import os
+
             if os.getenv('KUBERNETES_SERVICE_HOST'):
                 # Running inside cluster
                 config.load_incluster_config()
@@ -32,7 +34,7 @@ class KubernetesService:
                 # Running outside cluster
                 config.load_kube_config()
                 logger.info("Loaded kubeconfig from local environment")
-            
+
             self.batch_v1 = client.BatchV1Api()
         except Exception as e:
             logger.error(f"Failed to initialize Kubernetes client: {e}")
@@ -44,11 +46,12 @@ class KubernetesService:
             "prompt": job_request.prompt,
             "n_predict": job_request.n_predict,
             "ignore_eos": True,
-            "temperature": job_request.temperature
+            "temperature": job_request.temperature,
         }
-        
+
         # Escape quotes in JSON for shell command
         import json
+        
         json_str = json.dumps(json_data).replace('"', '\\"')
         
         return (

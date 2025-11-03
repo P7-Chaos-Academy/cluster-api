@@ -5,6 +5,7 @@
 | GITHUB_ACTIONS             | Pass ✅           |
 | GITLEAKS                   | Pass ✅           |
 | GIT_MERGE_CONFLICT_MARKERS | Pass ✅           |
+| NATURAL_LANGUAGE           | Pass ✅           |
 | PRE_COMMIT                 | Pass ✅           |
 | PYTHON_BLACK               | Pass ✅           |
 | PYTHON_RUFF                | Pass ✅           |

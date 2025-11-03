@@ -68,7 +68,18 @@ class KubernetesService:
             "name": container_name,
             "image": "curlimages/curl:8.9.1",
             "env": [
-                {"name": "PROMPT", "value": job_request.prompt}
+                {
+                    "name": "PROMPT",
+                    "value": job_request.prompt
+                },
+                {
+                    "name": "HOST_IP",
+                    "valueFrom": {
+                        "fieldRef": {
+                            "fieldPath": "status.hostIP"
+                        }
+                    }
+                }
             ],
             "command": ["sh", "-c", self._build_llama_curl_command(job_request)]
         }

@@ -1,6 +1,6 @@
 # Kubernetes Job API
 
-A professionally structured REST API for creating and managing Kubernetes jobs with Swagger documentation and layered architecture.
+A professionally structured REST API for creating and managing Kubernetes jobs with Swagger documentation and layered architecture
 
 ## 🚀 Features
 

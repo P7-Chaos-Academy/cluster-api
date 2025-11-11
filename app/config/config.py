@@ -14,6 +14,10 @@ class Config:
     # Kubernetes settings
     DEFAULT_NAMESPACE = os.getenv('DEFAULT_NAMESPACE', 'prompts')
     
+    # Database settings
+    DATABASE_PATH = os.getenv('DATABASE_PATH', '/app/data/cluster.db')
+    DATABASE_DIR = os.path.dirname(DATABASE_PATH) if DATABASE_PATH else '/app/data'
+    
     # Logging settings
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
     

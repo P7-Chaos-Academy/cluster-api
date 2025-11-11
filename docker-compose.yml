@@ -13,9 +13,12 @@ services:
       - PORT=5000
       - DEFAULT_NAMESPACE=default
       - LOG_LEVEL=INFO
+      - DATABASE_PATH=/app/data/cluster.db
     volumes:
       # Mount kubeconfig if running outside cluster
       - ~/.kube:/home/appuser/.kube:ro
+      # Persist SQLite database
+      - sqlite-data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/')"]
@@ -37,9 +40,16 @@ services:
       - PORT=5000
       - DEFAULT_NAMESPACE=default
       - LOG_LEVEL=DEBUG
+      - DATABASE_PATH=/app/data/cluster.db
     volumes:
       - .:/app
       - ~/.kube:/home/appuser/.kube:ro
+      # Persist SQLite database
+      - sqlite-data:/app/data
     restart: unless-stopped
     profiles:
       - dev
+
+volumes:
+  sqlite-data:
+    driver: local

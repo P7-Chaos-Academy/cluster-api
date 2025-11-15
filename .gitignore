@@ -46,5 +46,10 @@ htmlcov/
 # Database
 *.db
 *.sqlite3
+data/
+cluster.db
+
+# Linter output
+super-linter-output/
 
 AGENTS.md

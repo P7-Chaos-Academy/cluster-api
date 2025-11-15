@@ -1,0 +1,275 @@
+"""Background service to watch Kubernetes jobs and store results in SQLite."""
+import logging
+import threading
+import json
+from typing import Optional
+from kubernetes import client, watch, config
+from kubernetes.client.rest import ApiException
+
+from app.config.config import get_config
+from app.repositories.job_repository import job_repository
+
+logger = logging.getLogger(__name__)
+
+
+class JobWatcherService:
+    """Service to watch Kubernetes jobs and persist results."""
+
+    def __init__(self):
+        self.config = get_config()
+        self.core_v1 = None
+        self.batch_v1 = None
+        self.watcher_thread = None
+        self.should_stop = False
+        self.repository = job_repository
+
+    def _parse_curl_output(self, logs: str) -> Optional[str]:
+        """Parse curl output to extract JSON response, removing progress lines."""
+        if not logs:
+            return None
+        
+        # Curl progress output uses \r (carriage return) for updating the same line
+        # Split by newlines and filter out lines with \r (progress lines)
+        lines = logs.split('\n')
+        json_lines = []
+        
+        for line in lines:
+            # Skip lines with carriage returns (curl progress)
+            if '\r' in line:
+                # Take only the last part after the final \r
+                parts = line.split('\r')
+                last_part = parts[-1].strip()
+                if last_part and last_part.startswith('{'):
+                    json_lines.append(last_part)
+            elif line.strip().startswith('{'):
+                json_lines.append(line.strip())
+        
+        # Join all JSON lines
+        json_str = '\n'.join(json_lines)
+        return json_str if json_str else logs
+
+    def _save_job_result(self, job_name: str, namespace: str, 
+                        status: str, logs: Optional[str] = None,
+                        pod_name: Optional[str] = None,
+                        error_message: Optional[str] = None):
+        """Save job result using the repository."""
+        # Extract prompt and result from logs if available
+        prompt = None
+        result = None
+        if logs:
+            try:
+                # Clean up curl output first
+                clean_logs = self._parse_curl_output(logs)
+                
+                # Parse JSON response from llama.cpp
+                log_json = json.loads(clean_logs)
+                result = log_json.get('content', '').strip()
+                prompt = log_json.get('prompt', None)
+                
+                # If result is empty, fall back to full JSON
+                if not result:
+                    result = clean_logs
+                    
+            except json.JSONDecodeError:
+                # If JSON parsing fails, try to clean curl output anyway
+                result = self._parse_curl_output(logs) or logs
+        
+        # Use repository to save
+        self.repository.save_job_result(
+            job_name=job_name,
+            namespace=namespace,
+            status=status,
+            prompt=prompt,
+            result=result,
+            pod_name=pod_name,
+            error_message=error_message
+        )
+
+    def _get_job_logs(self, job_name: str, namespace: str) -> Optional[str]:
+        """Get logs from job's pod."""
+        try:
+            # Find pod associated with job
+            label_selector = f"job-name={job_name}"
+            pods = self.core_v1.list_namespaced_pod(
+                namespace=namespace,
+                label_selector=label_selector
+            )
+
+            if not pods.items:
+                return None
+
+            pod = pods.items[0]
+            pod_name = pod.metadata.name
+
+            # Get pod logs
+            logs = self.core_v1.read_namespaced_pod_log(
+                name=pod_name,
+                namespace=namespace
+            )
+            
+            return logs
+
+        except ApiException as e:
+            logger.warning(f"Could not get logs for {job_name}: {e.reason}")
+            return None
+
+    def _check_existing_jobs(self):
+        """Check for any completed jobs that weren't processed yet."""
+        namespace = self.config.DEFAULT_NAMESPACE
+        logger.info(f"Checking for existing completed jobs in namespace: {namespace}")
+        
+        try:
+            jobs = self.batch_v1.list_namespaced_job(namespace=namespace)
+            
+            for job in jobs.items:
+                job_name = job.metadata.name
+                
+                # Only care about jobs with our scheduler
+                scheduler_name = getattr(job.spec.template.spec, 'scheduler_name', None)
+                if scheduler_name != 'llama-scheduler':
+                    continue
+                
+                status = job.status
+                
+                # Check if already in database
+                existing = self.repository.get_job_result(job_name, namespace)
+                if existing:
+                    continue
+                
+                # Process completed jobs
+                if status.succeeded and status.succeeded > 0:
+                    logger.info(f"Found completed job {job_name}, processing...")
+                    logs = self._get_job_logs(job_name, namespace)
+                    self._save_job_result(
+                        job_name=job_name,
+                        namespace=namespace,
+                        status='succeeded',
+                        logs=logs
+                    )
+                elif status.failed and status.failed > 0:
+                    logger.info(f"Found failed job {job_name}, processing...")
+                    logs = self._get_job_logs(job_name, namespace)
+                    self._save_job_result(
+                        job_name=job_name,
+                        namespace=namespace,
+                        status='failed',
+                        logs=logs,
+                        error_message="Job failed"
+                    )
+                    
+        except Exception as e:
+            logger.error(f"Error checking existing jobs: {e}")
+
+    def _watch_jobs(self):
+        """Watch Kubernetes jobs in the prompts namespace."""
+        namespace = self.config.DEFAULT_NAMESPACE
+        
+        logger.info(f"Starting job watcher for namespace: {namespace}")
+        
+        # First check for any existing completed jobs
+        self._check_existing_jobs()
+        
+        w = watch.Watch()
+        
+        try:
+            for event in w.stream(
+                self.batch_v1.list_namespaced_job,
+                namespace=namespace,
+                timeout_seconds=300  # Restart watch every 5 minutes
+            ):
+                if self.should_stop:
+                    logger.info("Job watcher stopping...")
+                    w.stop()
+                    break
+
+                event_type = event['type']
+                job = event['object']
+                job_name = job.metadata.name
+                
+                logger.info(f"Job event: {event_type} - {job_name} - Status: {job.status}")
+
+                # Only care about jobs with our scheduler
+                scheduler_name = getattr(job.spec.template.spec, 'scheduler_name', None)
+                if scheduler_name != 'llama-scheduler':
+                    logger.debug(f"Skipping job {job_name} - scheduler: {scheduler_name}")
+                    continue
+
+                # Check if already in database to avoid duplicates
+                existing = self.repository.get_job_result(job_name, namespace)
+                if existing:
+                    logger.debug(f"Job {job_name} already processed, skipping")
+                    continue
+
+                # Check if job completed (succeeded or failed)
+                status = job.status
+                
+                if status.succeeded and status.succeeded > 0:
+                    logger.info(f"Job {job_name} succeeded, fetching logs...")
+                    logs = self._get_job_logs(job_name, namespace)
+                    self._save_job_result(
+                        job_name=job_name,
+                        namespace=namespace,
+                        status='succeeded',
+                        logs=logs
+                    )
+                    
+                elif status.failed and status.failed > 0:
+                    logger.info(f"Job {job_name} failed")
+                    logs = self._get_job_logs(job_name, namespace)
+                    self._save_job_result(
+                        job_name=job_name,
+                        namespace=namespace,
+                        status='failed',
+                        logs=logs,
+                        error_message="Job failed"
+                    )
+
+        except Exception as e:
+            logger.error(f"Job watcher error: {e}")
+            
+        finally:
+            w.stop()
+            
+        if not self.should_stop:
+            # Restart watcher after timeout or error
+            logger.info("Restarting job watcher in 5 seconds...")
+            threading.Timer(5.0, self._watch_jobs).start()
+
+    def start(self):
+        """Start the background job watcher."""
+        if self.watcher_thread and self.watcher_thread.is_alive():
+            logger.warning("Job watcher already running")
+            return
+        
+        try:
+            import os
+            if os.getenv('KUBERNETES_SERVICE_HOST'):
+                config.load_incluster_config()
+            else:
+                config.load_kube_config()
+            
+            self.batch_v1 = client.BatchV1Api()
+            self.core_v1 = client.CoreV1Api()
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize Kubernetes client: {e}")
+            raise
+
+        self.should_stop = False
+        self.watcher_thread = threading.Thread(
+            target=self._watch_jobs,
+            daemon=True,
+            name="JobWatcher"
+        )
+        self.watcher_thread.start()
+        logger.info("Job watcher started")
+
+    def stop(self):
+        """Stop the background job watcher."""
+        self.should_stop = True
+        if self.watcher_thread:
+            self.watcher_thread.join(timeout=5)
+        logger.info("Job watcher stopped")
+
+
+job_watcher_service = JobWatcherService()

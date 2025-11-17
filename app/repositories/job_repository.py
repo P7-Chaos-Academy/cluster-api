@@ -1,4 +1,5 @@
 """Repository for job results database operations."""
+
 import os
 import sqlite3
 import logging
@@ -16,8 +17,8 @@ class JobRepository:
 
     def __init__(self):
         self.config = get_config()
-        self.db_path = getattr(self.config, 'DATABASE_PATH', '/app/data/cluster.db')
-        self.db_dir = getattr(self.config, 'DATABASE_DIR', '/app/data')
+        self.db_path = getattr(self.config, "DATABASE_PATH", "/app/data/cluster.db")
+        self.db_dir = getattr(self.config, "DATABASE_DIR", "/app/data")
         self._init_database()
 
     @contextmanager
@@ -49,7 +50,8 @@ class JobRepository:
                 cursor = conn.cursor()
 
                 # Create main table
-                cursor.execute('''
+                cursor.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS job_results (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         job_name TEXT NOT NULL,
@@ -63,23 +65,30 @@ class JobRepository:
                         error_message TEXT,
                         UNIQUE(job_name, namespace)
                     )
-                ''')
+                """
+                )
 
                 # Create indexes for faster queries
-                cursor.execute('''
+                cursor.execute(
+                    """
                     CREATE INDEX IF NOT EXISTS idx_job_completed 
                     ON job_results(completed_at DESC)
-                ''')
+                """
+                )
 
-                cursor.execute('''
+                cursor.execute(
+                    """
                     CREATE INDEX IF NOT EXISTS idx_job_status 
                     ON job_results(status)
-                ''')
+                """
+                )
 
-                cursor.execute('''
+                cursor.execute(
+                    """
                     CREATE INDEX IF NOT EXISTS idx_job_name 
                     ON job_results(job_name, namespace)
-                ''')
+                """
+                )
 
             logger.info(f"Database initialized successfully at {self.db_path}")
 
@@ -116,21 +125,24 @@ class JobRepository:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
-                cursor.execute('''
+                cursor.execute(
+                    """
                     INSERT OR REPLACE INTO job_results 
                     (job_name, namespace, pod_name, status, prompt, result, 
                      completed_at, error_message)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    job_name,
-                    namespace,
-                    pod_name,
-                    status,
-                    prompt,
-                    result,
-                    datetime.now().isoformat(),
-                    error_message
-                ))
+                """,
+                    (
+                        job_name,
+                        namespace,
+                        pod_name,
+                        status,
+                        prompt,
+                        result,
+                        datetime.now().isoformat(),
+                        error_message,
+                    ),
+                )
 
             logger.info(f"Saved result for job {job_name} with status {status}")
             return True
@@ -157,12 +169,15 @@ class JobRepository:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
-                cursor.execute('''
+                cursor.execute(
+                    """
                     SELECT id, job_name, namespace, pod_name, status, 
                            prompt, result, created_at, completed_at, error_message
                     FROM job_results
                     WHERE job_name = ? AND namespace = ?
-                ''', (job_name, namespace))
+                """,
+                    (job_name, namespace),
+                )
 
                 row = cursor.fetchone()
                 if row:
@@ -173,7 +188,9 @@ class JobRepository:
             logger.error(f"Error fetching job result: {e}")
             return None
 
-    def get_all_job_results(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    def get_all_job_results(
+        self, limit: int = 100, offset: int = 0
+    ) -> List[Dict[str, Any]]:
         """
         Get all job results with pagination.
 
@@ -188,13 +205,16 @@ class JobRepository:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
-                cursor.execute('''
+                cursor.execute(
+                    """
                     SELECT id, job_name, namespace, pod_name, status, 
                            prompt, result, created_at, completed_at, error_message
                     FROM job_results
                     ORDER BY completed_at DESC
                     LIMIT ? OFFSET ?
-                ''', (limit, offset))
+                """,
+                    (limit, offset),
+                )
 
                 return [dict(row) for row in cursor.fetchall()]
 
@@ -217,14 +237,17 @@ class JobRepository:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
-                cursor.execute('''
+                cursor.execute(
+                    """
                     SELECT id, job_name, namespace, pod_name, status, 
                            prompt, result, created_at, completed_at, error_message
                     FROM job_results
                     WHERE status = ?
                     ORDER BY completed_at DESC
                     LIMIT ?
-                ''', (status, limit))
+                """,
+                    (status, limit),
+                )
 
                 return [dict(row) for row in cursor.fetchall()]
 
@@ -247,10 +270,13 @@ class JobRepository:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
-                cursor.execute('''
+                cursor.execute(
+                    """
                     DELETE FROM job_results
                     WHERE job_name = ? AND namespace = ?
-                ''', (job_name, namespace))
+                """,
+                    (job_name, namespace),
+                )
 
             logger.info(f"Deleted result for job {job_name} in namespace {namespace}")
             return True
@@ -269,7 +295,7 @@ class JobRepository:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT COUNT(*) FROM job_results')
+                cursor.execute("SELECT COUNT(*) FROM job_results")
                 return cursor.fetchone()[0]
 
         except Exception as e:
@@ -288,39 +314,45 @@ class JobRepository:
                 cursor = conn.cursor()
 
                 # Total count
-                cursor.execute('SELECT COUNT(*) FROM job_results')
+                cursor.execute("SELECT COUNT(*) FROM job_results")
                 total = cursor.fetchone()[0]
 
                 # Count by status
-                cursor.execute('''
+                cursor.execute(
+                    """
                     SELECT status, COUNT(*) as count
                     FROM job_results
                     GROUP BY status
-                ''')
-                status_counts = {row['status']: row['count'] for row in cursor.fetchall()}
+                """
+                )
+                status_counts = {
+                    row["status"]: row["count"] for row in cursor.fetchall()
+                }
 
                 # Most recent job
-                cursor.execute('''
+                cursor.execute(
+                    """
                     SELECT completed_at
                     FROM job_results
                     ORDER BY completed_at DESC
                     LIMIT 1
-                ''')
+                """
+                )
                 recent = cursor.fetchone()
-                most_recent = recent['completed_at'] if recent else None
+                most_recent = recent["completed_at"] if recent else None
 
                 return {
-                    'total_jobs': total,
-                    'status_counts': status_counts,
-                    'most_recent_completion': most_recent
+                    "total_jobs": total,
+                    "status_counts": status_counts,
+                    "most_recent_completion": most_recent,
                 }
 
         except Exception as e:
             logger.error(f"Error getting statistics: {e}")
             return {
-                'total_jobs': 0,
-                'status_counts': {},
-                'most_recent_completion': None
+                "total_jobs": 0,
+                "status_counts": {},
+                "most_recent_completion": None,
             }
 
 

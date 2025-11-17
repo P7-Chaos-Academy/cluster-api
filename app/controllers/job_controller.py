@@ -7,6 +7,7 @@ from dataclasses import asdict
 
 from app.models.job import JobCreateRequest
 from app.services.kubernetes_service import kubernetes_service
+from app.repositories.job_repository import job_repository
 from app.config.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,23 @@ job_logs_model = api.model(
     },
 )
 
+job_history_model = api.model(
+    "JobHistory",
+    {
+        "id": fields.Integer(description="Database ID", example=1),
+        "job_name": fields.String(description="Job name", example="llama-job-abc123"),
+        "namespace": fields.String(description="Namespace", example="prompts"),
+        "status": fields.String(description="Job status", example="succeeded"),
+        "prompt": fields.String(description="Input prompt", example="Hello world!"),
+        "result": fields.String(
+            description="LLM response", example="Hello! How can I help you?"
+        ),
+        "completed_at": fields.String(
+            description="Completion timestamp", example="2025-11-03T12:00:00Z"
+        ),
+    },
+)
+
 
 @api.route("/")
 class JobList(Resource):
@@ -133,4 +151,68 @@ class JobLogs(Resource):
             logger.error(f"Error getting job logs: {e}")
             if "not found" in str(e).lower():
                 api.abort(404, error=str(e))
+            api.abort(500, error=str(e))
+
+
+@api.route("/history")
+class JobHistory(Resource):
+    """Job history operations."""
+
+    @api.doc("get_job_history")
+    @api.marshal_list_with(job_history_model, code=200)
+    @api.response(500, "Internal server error", error_model)
+    def get(self):
+        """Get historical job results from database."""
+        try:
+            limit = request.args.get("limit", 100, type=int)
+            offset = request.args.get("offset", 0, type=int)
+
+            results = job_repository.get_all_job_results(limit=limit, offset=offset)
+            return results, 200
+
+        except Exception as e:
+            logger.error(f"Error querying job history: {e}")
+            api.abort(500, error=str(e))
+
+
+@api.route("/history/<string:job_name>")
+@api.param("job_name", "The job name")
+class JobHistoryDetail(Resource):
+    """Single job history operations."""
+
+    @api.doc("get_job_result")
+    @api.marshal_with(job_history_model, code=200)
+    @api.response(404, "Job not found", error_model)
+    @api.response(500, "Internal server error", error_model)
+    def get(self, job_name):
+        """Get stored result for a specific job."""
+        try:
+            namespace = request.args.get("namespace", config.DEFAULT_NAMESPACE)
+            result = job_repository.get_job_result(job_name, namespace)
+
+            if not result:
+                api.abort(404, error=f"No result found for job {job_name}")
+
+            return result, 200
+
+        except Exception as e:
+            logger.error(f"Error querying job result: {e}")
+            api.abort(500, error=str(e))
+
+
+@api.route("/history/stats")
+class JobStatistics(Resource):
+    """Job statistics operations."""
+
+    @api.doc("get_job_statistics")
+    @api.response(200, "Success")
+    @api.response(500, "Internal server error", error_model)
+    def get(self):
+        """Get database statistics about job results."""
+        try:
+            stats = job_repository.get_statistics()
+            return stats, 200
+
+        except Exception as e:
+            logger.error(f"Error querying job statistics: {e}")
             api.abort(500, error=str(e))

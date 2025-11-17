@@ -285,6 +285,38 @@ class JobRepository:
             logger.error(f"Error deleting job result: {e}")
             return False
 
+    def clear_all_job_results(self) -> tuple[bool, int]:
+        """
+        Delete ALL job results from the database.
+
+        Returns:
+            tuple: (success: bool, count: int) - Success status and number of records deleted
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Get count before deletion
+                cursor.execute("SELECT COUNT(*) FROM job_results")
+                count = cursor.fetchone()[0]
+
+                # Delete all records
+                cursor.execute("DELETE FROM job_results")
+
+                # Reset auto-increment counter
+                cursor.execute(
+                    'DELETE FROM sqlite_sequence WHERE name="job_results"'
+                )
+
+            logger.warning(
+                f"Cleared all job results from database ({count} records deleted)"
+            )
+            return True, count
+
+        except Exception as e:
+            logger.error(f"Error clearing all job results: {e}")
+            return False, 0
+
     def get_job_count(self) -> int:
         """
         Get total count of job results in database.

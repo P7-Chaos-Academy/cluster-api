@@ -24,6 +24,31 @@ class JobWatcherService:
         self.should_stop = False
         self.repository = job_repository
 
+    def _parse_curl_output(self, logs: str) -> Optional[str]:
+        """Parse curl output to extract JSON response, removing progress lines."""
+        if not logs:
+            return None
+
+        # Curl progress output uses \r (carriage return) for updating the same line
+        # Split by newlines and filter out lines with \r (progress lines)
+        lines = logs.split("\n")
+        json_lines = []
+
+        for line in lines:
+            # Skip lines with carriage returns (curl progress)
+            if "\r" in line:
+                # Take only the last part after the final \r
+                parts = line.split("\r")
+                last_part = parts[-1].strip()
+                if last_part and last_part.startswith("{"):
+                    json_lines.append(last_part)
+            elif line.strip().startswith("{"):
+                json_lines.append(line.strip())
+
+        # Join all JSON lines
+        json_str = "\n".join(json_lines)
+        return json_str if json_str else logs
+
     def _save_job_result(
         self,
         job_name: str,
@@ -39,12 +64,21 @@ class JobWatcherService:
         result = None
         if logs:
             try:
+                # Clean up curl output first
+                clean_logs = self._parse_curl_output(logs)
+
                 # Parse JSON response from llama.cpp
-                log_json = json.loads(logs)
-                result = log_json.get("content", logs)
+                log_json = json.loads(clean_logs)
+                result = log_json.get("content", "").strip()
                 prompt = log_json.get("prompt", None)
+
+                # If result is empty, fall back to full JSON
+                if not result:
+                    result = clean_logs
+
             except json.JSONDecodeError:
-                result = logs
+                # If JSON parsing fails, try to clean curl output anyway
+                result = self._parse_curl_output(logs) or logs
 
         # Use repository to save
         self.repository.save_job_result(

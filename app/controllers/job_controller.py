@@ -216,3 +216,67 @@ class JobStatistics(Resource):
         except Exception as e:
             logger.error(f"Error querying job statistics: {e}")
             api.abort(500, error=str(e))
+
+
+@api.route("/history/<string:job_name>/delete")
+@api.param("job_name", "The job name")
+class JobHistoryDelete(Resource):
+    """Delete specific job history."""
+
+    @api.doc("delete_job_result")
+    @api.response(200, "Job result deleted successfully")
+    @api.response(404, "Job not found", error_model)
+    @api.response(500, "Internal server error", error_model)
+    def delete(self, job_name):
+        """Delete a specific job result from the database."""
+        try:
+            namespace = request.args.get("namespace", config.DEFAULT_NAMESPACE)
+
+            # Check if job exists
+            existing = job_repository.get_job_result(job_name, namespace)
+            if not existing:
+                api.abort(
+                    404,
+                    error=f"No result found for job {job_name} in namespace {namespace}",
+                )
+
+            # Delete the job result
+            success = job_repository.delete_job_result(job_name, namespace)
+
+            if success:
+                return {
+                    "status": "success",
+                    "message": f"Job result {job_name} deleted successfully",
+                }, 200
+            else:
+                api.abort(500, error="Failed to delete job result")
+
+        except Exception as e:
+            logger.error(f"Error deleting job result: {e}")
+            api.abort(500, error=str(e))
+
+
+@api.route("/history/clear")
+class JobHistoryClear(Resource):
+    """Clear all job history."""
+
+    @api.doc("clear_all_job_results")
+    @api.response(200, "All job results cleared successfully")
+    @api.response(500, "Internal server error", error_model)
+    def delete(self):
+        """Clear ALL job results from the database. Use with caution!"""
+        try:
+            success, count = job_repository.clear_all_job_results()
+
+            if success:
+                return {
+                    "status": "success",
+                    "message": f"Database cleared successfully",
+                    "records_deleted": count,
+                }, 200
+            else:
+                api.abort(500, error="Failed to clear database")
+
+        except Exception as e:
+            logger.error(f"Error clearing database: {e}")
+            api.abort(500, error=str(e))

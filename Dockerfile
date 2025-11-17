@@ -26,6 +26,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Create data directory for SQLite database
+RUN mkdir -p /app/data && chmod 755 /app/data
+
 # Expose port
 EXPOSE 5000
 

@@ -1,4 +1,5 @@
 """Flask application factory."""
+
 from flask import Flask
 from flask_restx import Api
 
@@ -12,27 +13,27 @@ def create_app():
     """Create and configure the Flask application."""
     # Get configuration
     config = get_config()
-    
+
     # Initialize logging
     config.init_logging()
-    
+
     # Create Flask app
     app = Flask(__name__)
     app.config.from_object(config)
-    
+
     # Create API with Swagger documentation
     api = Api(
         app,
         title=config.API_TITLE,
         version=config.API_VERSION,
         description=config.API_DESCRIPTION,
-        doc='/docs/',  # Swagger UI endpoint
-        prefix='/api/v1'
+        doc="/docs/",  # Swagger UI endpoint
+        prefix="/api/v1",
     )
-    
+
     # Register namespaces
-    api.add_namespace(jobs_api, path='/jobs')
-    api.add_namespace(nodes_api, path='/nodes')
+    api.add_namespace(jobs_api, path="/jobs")
+    api.add_namespace(nodes_api, path="/nodes")
 
     # Start job watcher on application startup
     with app.app_context():
@@ -41,16 +42,16 @@ def create_app():
             app.logger.info("Job watcher service started successfully")
         except Exception as e:
             app.logger.error(f"Failed to start job watcher: {e}")
-    
+
     # Health check endpoint
-    @app.route('/')
-    @app.route('/health')
+    @app.route("/")
+    @app.route("/health")
     def health_check():
         """Health check endpoint."""
         return {
             "status": "healthy",
             "service": config.API_TITLE,
-            "version": config.API_VERSION
+            "version": config.API_VERSION,
         }
-    
+
     return app

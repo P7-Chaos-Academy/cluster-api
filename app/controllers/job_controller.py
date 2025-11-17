@@ -84,14 +84,10 @@ job_history_model = api.model(
     "JobHistory",
     {
         "id": fields.Integer(description="Database ID", example=1),
-        "job_name": fields.String(
-            description="Job name", example="llama-job-abc123"
-        ),
+        "job_name": fields.String(description="Job name", example="llama-job-abc123"),
         "namespace": fields.String(description="Namespace", example="prompts"),
         "status": fields.String(description="Job status", example="succeeded"),
-        "prompt": fields.String(
-            description="Input prompt", example="Hello world!"
-        ),
+        "prompt": fields.String(description="Input prompt", example="Hello world!"),
         "result": fields.String(
             description="LLM response", example="Hello! How can I help you?"
         ),
@@ -168,9 +164,9 @@ class JobHistory(Resource):
     def get(self):
         """Get historical job results from database."""
         try:
-            limit = request.args.get('limit', 100, type=int)
-            offset = request.args.get('offset', 0, type=int)
-            
+            limit = request.args.get("limit", 100, type=int)
+            offset = request.args.get("offset", 0, type=int)
+
             results = job_repository.get_all_job_results(limit=limit, offset=offset)
             return results, 200
 

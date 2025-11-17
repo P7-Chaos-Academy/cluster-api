@@ -7,7 +7,6 @@ from dataclasses import asdict
 
 from app.models.job import JobCreateRequest
 from app.services.kubernetes_service import kubernetes_service
-from app.repositories.job_repository import job_repository
 from app.config.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -80,27 +79,6 @@ job_logs_model = api.model(
     },
 )
 
-job_history_model = api.model(
-    "JobHistory",
-    {
-        "id": fields.Integer(description="Database ID", example=1),
-        "job_name": fields.String(
-            description="Job name", example="llama-job-abc123"
-        ),
-        "namespace": fields.String(description="Namespace", example="prompts"),
-        "status": fields.String(description="Job status", example="succeeded"),
-        "prompt": fields.String(
-            description="Input prompt", example="Hello world!"
-        ),
-        "result": fields.String(
-            description="LLM response", example="Hello! How can I help you?"
-        ),
-        "completed_at": fields.String(
-            description="Completion timestamp", example="2025-11-03T12:00:00Z"
-        ),
-    },
-)
-
 
 @api.route("/")
 class JobList(Resource):
@@ -155,129 +133,4 @@ class JobLogs(Resource):
             logger.error(f"Error getting job logs: {e}")
             if "not found" in str(e).lower():
                 api.abort(404, error=str(e))
-            api.abort(500, error=str(e))
-
-
-@api.route("/history")
-class JobHistory(Resource):
-    """Job history operations."""
-
-    @api.doc("get_job_history")
-    @api.marshal_list_with(job_history_model, code=200)
-    @api.response(500, "Internal server error", error_model)
-    def get(self):
-        """Get historical job results from database."""
-        try:
-            limit = request.args.get('limit', 100, type=int)
-            offset = request.args.get('offset', 0, type=int)
-            
-            results = job_repository.get_all_job_results(limit=limit, offset=offset)
-            return results, 200
-
-        except Exception as e:
-            logger.error(f"Error querying job history: {e}")
-            api.abort(500, error=str(e))
-
-
-@api.route("/history/<string:job_name>")
-@api.param("job_name", "The job name")
-class JobHistoryDetail(Resource):
-    """Single job history operations."""
-
-    @api.doc("get_job_result")
-    @api.marshal_with(job_history_model, code=200)
-    @api.response(404, "Job not found", error_model)
-    @api.response(500, "Internal server error", error_model)
-    def get(self, job_name):
-        """Get stored result for a specific job."""
-        try:
-            namespace = request.args.get("namespace", config.DEFAULT_NAMESPACE)
-            result = job_repository.get_job_result(job_name, namespace)
-
-            if not result:
-                api.abort(404, error=f"No result found for job {job_name}")
-
-            return result, 200
-
-        except Exception as e:
-            logger.error(f"Error querying job result: {e}")
-            api.abort(500, error=str(e))
-
-
-@api.route("/history/stats")
-class JobStatistics(Resource):
-    """Job statistics operations."""
-
-    @api.doc("get_job_statistics")
-    @api.response(200, "Success")
-    @api.response(500, "Internal server error", error_model)
-    def get(self):
-        """Get database statistics about job results."""
-        try:
-            stats = job_repository.get_statistics()
-            return stats, 200
-
-        except Exception as e:
-            logger.error(f"Error querying job statistics: {e}")
-            api.abort(500, error=str(e))
-
-
-@api.route("/history/<string:job_name>/delete")
-@api.param("job_name", "The job name")
-class JobHistoryDelete(Resource):
-    """Delete specific job history."""
-
-    @api.doc("delete_job_result")
-    @api.response(200, "Job result deleted successfully")
-    @api.response(404, "Job not found", error_model)
-    @api.response(500, "Internal server error", error_model)
-    def delete(self, job_name):
-        """Delete a specific job result from the database."""
-        try:
-            namespace = request.args.get("namespace", config.DEFAULT_NAMESPACE)
-            
-            # Check if job exists
-            existing = job_repository.get_job_result(job_name, namespace)
-            if not existing:
-                api.abort(404, error=f"No result found for job {job_name} in namespace {namespace}")
-            
-            # Delete the job result
-            success = job_repository.delete_job_result(job_name, namespace)
-            
-            if success:
-                return {
-                    "status": "success",
-                    "message": f"Job result {job_name} deleted successfully"
-                }, 200
-            else:
-                api.abort(500, error="Failed to delete job result")
-
-        except Exception as e:
-            logger.error(f"Error deleting job result: {e}")
-            api.abort(500, error=str(e))
-
-
-@api.route("/history/clear")
-class JobHistoryClear(Resource):
-    """Clear all job history."""
-
-    @api.doc("clear_all_job_results")
-    @api.response(200, "All job results cleared successfully")
-    @api.response(500, "Internal server error", error_model)
-    def delete(self):
-        """Clear ALL job results from the database. Use with caution!"""
-        try:
-            success, count = job_repository.clear_all_job_results()
-            
-            if success:
-                return {
-                    "status": "success",
-                    "message": f"Database cleared successfully",
-                    "records_deleted": count
-                }, 200
-            else:
-                api.abort(500, error="Failed to clear database")
-
-        except Exception as e:
-            logger.error(f"Error clearing database: {e}")
             api.abort(500, error=str(e))

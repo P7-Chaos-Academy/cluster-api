@@ -1,4 +1,10 @@
-.PHONY: help install dev run test lint format clean docker-build docker-run
+.PHONY: help install dev run test lint format clean docker-build docker-run docker-push docker-push-dev
+
+# Docker variables
+IMAGE_NAME ?= cgamel/cluster-api
+TIMESTAMP := $(shell date +%s)
+GIT_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo "dev")
+DEV_TAG := $(shell git diff --quiet && git diff --cached --quiet && echo $(GIT_HASH) || echo $(GIT_HASH)-$(TIMESTAMP))
 
 help:  ## Show this help message
 	@echo "Available commands:"
@@ -28,11 +34,20 @@ clean:  ## Clean up cache files
 	find . -type f -name '*.pyo' -delete
 	find . -type d -name '*.egg-info' -exec rm -rf {} + 2>/dev/null || true
 
-docker-build:  ## Build Docker image
-	docker build -t cgamel/cluster-api:latest .
+docker-build:  ## Build Docker image locally
+	docker build -t $(IMAGE_NAME):$(GIT_HASH) .
 
-docker-run:  ## Run Docker container
-	docker run -p 5000:5000 cgamel/cluster-api:latest
+docker-push: docker-build
+	docker push $(IMAGE_NAME):$(GIT_HASH)
+	@echo "$(IMAGE_NAME):$(GIT_HASH)"
+
+docker-push-dev:
+	docker build -t $(IMAGE_NAME):$(DEV_TAG) .
+	docker push $(IMAGE_NAME):$(DEV_TAG)
+	@echo "$(IMAGE_NAME):$(DEV_TAG)"
+
+docker-run:  ## Run Docker container locally
+	docker run -p 5000:5000 $(IMAGE_NAME):latest
 
 check:  ## Quick syntax check of all Python files
 	@python -m py_compile app/app.py app/controllers/*.py app/services/*.py app/models/*.py app/config/*.py && echo "✓ All Python files have valid syntax"

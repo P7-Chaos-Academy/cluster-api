@@ -13,6 +13,7 @@ from app.models.job import (
     JobResponse,
 )
 from app.config.config import get_config
+from app.repositories.job_repository import job_repository
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ class KubernetesService:
         }
 
     def create_job(self, job_request: JobCreateRequest) -> Dict:
-        """Create a Kubernetes job."""
+        """Create a Kubernetes job and immediately record it in the database."""
         if not self.batch_v1:
             raise Exception("Kubernetes client not initialized")
 
@@ -126,6 +127,16 @@ class KubernetesService:
             )
 
             logger.info(f"Created job {job_request.name} in namespace {namespace}")
+
+            # Immediately save job to database with initial state
+            job_repository.save_job_result(
+                job_name=response.metadata.name,
+                namespace=response.metadata.namespace,
+                status="pending",  # Initial status
+                prompt=job_request.prompt,
+                # Other fields will be populated when job completes
+            )
+            logger.info(f"Recorded job {job_request.name} in database with status 'pending'")
 
             return JobResponse(
                 status="success",

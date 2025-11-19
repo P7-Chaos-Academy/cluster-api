@@ -57,16 +57,41 @@ class JobRepository:
                         job_name TEXT NOT NULL,
                         namespace TEXT NOT NULL,
                         pod_name TEXT,
+                        node_name TEXT,
                         status TEXT NOT NULL,
                         prompt TEXT,
                         result TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        started_at TIMESTAMP,
                         completed_at TIMESTAMP,
+                        duration_seconds REAL,
+                        power_consumed_wh REAL,
                         error_message TEXT,
                         UNIQUE(job_name, namespace)
                     )
                 """
                 )
+                
+                # Add new columns if they don't exist (for existing databases)
+                try:
+                    cursor.execute("ALTER TABLE job_results ADD COLUMN node_name TEXT")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+                    
+                try:
+                    cursor.execute("ALTER TABLE job_results ADD COLUMN started_at TIMESTAMP")
+                except sqlite3.OperationalError:
+                    pass
+                    
+                try:
+                    cursor.execute("ALTER TABLE job_results ADD COLUMN duration_seconds REAL")
+                except sqlite3.OperationalError:
+                    pass
+                    
+                try:
+                    cursor.execute("ALTER TABLE job_results ADD COLUMN power_consumed_wh REAL")
+                except sqlite3.OperationalError:
+                    pass
 
                 # Create indexes for faster queries
                 cursor.execute(
@@ -104,18 +129,35 @@ class JobRepository:
         prompt: Optional[str] = None,
         result: Optional[str] = None,
         pod_name: Optional[str] = None,
+        node_name: Optional[str] = None,
+        started_at: Optional[str] = None,
+        completed_at: Optional[str] = None,
+        duration_seconds: Optional[float] = None,
+        power_consumed_wh: Optional[float] = None,
         error_message: Optional[str] = None,
     ) -> bool:
         """
         Save or update a job result.
+        
+        Uses INSERT OR REPLACE which will:
+        - Insert a new row if job doesn't exist
+        - Update existing row if job exists (based on UNIQUE constraint on job_name, namespace)
+        
+        Note: When updating, only provided (non-None) values will overwrite existing data.
+        The created_at timestamp is preserved on updates.
 
         Args:
             job_name: Name of the Kubernetes job
             namespace: Kubernetes namespace
-            status: Job status (succeeded, failed, etc.)
+            status: Job status (pending, running, succeeded, failed, etc.)
             prompt: Optional prompt text sent to the job
             result: Optional result/output from the job
             pod_name: Optional pod name
+            node_name: Optional name of node where job ran
+            started_at: Optional timestamp when job started
+            completed_at: Optional timestamp when job completed
+            duration_seconds: Optional job duration in seconds
+            power_consumed_wh: Optional power consumed in watt-hours
             error_message: Optional error message if job failed
 
         Returns:
@@ -124,27 +166,84 @@ class JobRepository:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-
+                
+                # Check if job already exists to decide between INSERT and UPDATE
                 cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO job_results 
-                    (job_name, namespace, pod_name, status, prompt, result, 
-                     completed_at, error_message)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        job_name,
-                        namespace,
-                        pod_name,
-                        status,
-                        prompt,
-                        result,
-                        datetime.now().isoformat(),
-                        error_message,
-                    ),
+                    "SELECT id, created_at FROM job_results WHERE job_name = ? AND namespace = ?",
+                    (job_name, namespace)
                 )
+                existing = cursor.fetchone()
+                
+                if existing:
+                    # Update existing record, preserving created_at and only updating provided fields
+                    update_parts = ["status = ?"]
+                    values = [status]
+                    
+                    if prompt is not None:
+                        update_parts.append("prompt = ?")
+                        values.append(prompt)
+                    if result is not None:
+                        update_parts.append("result = ?")
+                        values.append(result)
+                    if pod_name is not None:
+                        update_parts.append("pod_name = ?")
+                        values.append(pod_name)
+                    if node_name is not None:
+                        update_parts.append("node_name = ?")
+                        values.append(node_name)
+                    if started_at is not None:
+                        update_parts.append("started_at = ?")
+                        values.append(started_at)
+                    if completed_at is not None:
+                        update_parts.append("completed_at = ?")
+                        values.append(completed_at)
+                    if duration_seconds is not None:
+                        update_parts.append("duration_seconds = ?")
+                        values.append(duration_seconds)
+                    if power_consumed_wh is not None:
+                        update_parts.append("power_consumed_wh = ?")
+                        values.append(power_consumed_wh)
+                    if error_message is not None:
+                        update_parts.append("error_message = ?")
+                        values.append(error_message)
+                    
+                    values.extend([job_name, namespace])
+                    
+                    cursor.execute(
+                        f"""
+                        UPDATE job_results 
+                        SET {', '.join(update_parts)}
+                        WHERE job_name = ? AND namespace = ?
+                        """,
+                        values
+                    )
+                    logger.info(f"Updated job {job_name} with status {status}")
+                else:
+                    # Insert new record
+                    cursor.execute(
+                        """
+                        INSERT INTO job_results 
+                        (job_name, namespace, pod_name, node_name, status, prompt, result, 
+                         started_at, completed_at, duration_seconds, power_consumed_wh, error_message)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            job_name,
+                            namespace,
+                            pod_name,
+                            node_name,
+                            status,
+                            prompt,
+                            result,
+                            started_at,
+                            completed_at,
+                            duration_seconds,
+                            power_consumed_wh,
+                            error_message,
+                        ),
+                    )
+                    logger.info(f"Created job {job_name} with status {status}")
 
-            logger.info(f"Saved result for job {job_name} with status {status}")
             return True
 
         except sqlite3.OperationalError as e:
@@ -171,8 +270,9 @@ class JobRepository:
 
                 cursor.execute(
                     """
-                    SELECT id, job_name, namespace, pod_name, status, 
-                           prompt, result, created_at, completed_at, error_message
+                    SELECT id, job_name, namespace, pod_name, node_name, status, 
+                           prompt, result, created_at, started_at, completed_at, 
+                           duration_seconds, power_consumed_wh, error_message
                     FROM job_results
                     WHERE job_name = ? AND namespace = ?
                 """,
@@ -207,8 +307,9 @@ class JobRepository:
 
                 cursor.execute(
                     """
-                    SELECT id, job_name, namespace, pod_name, status, 
-                           prompt, result, created_at, completed_at, error_message
+                    SELECT id, job_name, namespace, pod_name, node_name, status, 
+                           prompt, result, created_at, started_at, completed_at, 
+                           duration_seconds, power_consumed_wh, error_message
                     FROM job_results
                     ORDER BY completed_at DESC
                     LIMIT ? OFFSET ?
@@ -239,8 +340,9 @@ class JobRepository:
 
                 cursor.execute(
                     """
-                    SELECT id, job_name, namespace, pod_name, status, 
-                           prompt, result, created_at, completed_at, error_message
+                    SELECT id, job_name, namespace, pod_name, node_name, status, 
+                           prompt, result, created_at, started_at, completed_at, 
+                           duration_seconds, power_consumed_wh, error_message
                     FROM job_results
                     WHERE status = ?
                     ORDER BY completed_at DESC

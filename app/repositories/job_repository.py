@@ -115,10 +115,10 @@ class JobRepository:
                 """
                 )
 
-            logger.info(f"Database initialized successfully at {self.db_path}")
+            logger.info("Database initialized successfully at %s", self.db_path)
 
         except Exception as e:
-            logger.error(f"Failed to initialize database: {e}")
+            logger.error("Failed to initialize database: %s", e)
             raise
 
     def save_job_result(
@@ -175,49 +175,39 @@ class JobRepository:
                 existing = cursor.fetchone()
                 
                 if existing:
-                    # Update existing record, preserving created_at and only updating provided fields
-                    update_parts = ["status = ?"]
-                    values = [status]
-                    
-                    if prompt is not None:
-                        update_parts.append("prompt = ?")
-                        values.append(prompt)
-                    if result is not None:
-                        update_parts.append("result = ?")
-                        values.append(result)
-                    if pod_name is not None:
-                        update_parts.append("pod_name = ?")
-                        values.append(pod_name)
-                    if node_name is not None:
-                        update_parts.append("node_name = ?")
-                        values.append(node_name)
-                    if started_at is not None:
-                        update_parts.append("started_at = ?")
-                        values.append(started_at)
-                    if completed_at is not None:
-                        update_parts.append("completed_at = ?")
-                        values.append(completed_at)
-                    if duration_seconds is not None:
-                        update_parts.append("duration_seconds = ?")
-                        values.append(duration_seconds)
-                    if power_consumed_wh is not None:
-                        update_parts.append("power_consumed_wh = ?")
-                        values.append(power_consumed_wh)
-                    if error_message is not None:
-                        update_parts.append("error_message = ?")
-                        values.append(error_message)
-                    
-                    values.extend([job_name, namespace])
-                    
-                    cursor.execute(
-                        f"""
-                        UPDATE job_results 
-                        SET {', '.join(update_parts)}
-                        WHERE job_name = ? AND namespace = ?
-                        """,
-                        values
-                    )
-                    logger.info(f"Updated job {job_name} with status {status}")
+                    # Build update dynamically from a mapping to keep code concise
+                    fields = {
+                        "status": status,
+                        "prompt": prompt,
+                        "result": result,
+                        "pod_name": pod_name,
+                        "node_name": node_name,
+                        "started_at": started_at,
+                        "completed_at": completed_at,
+                        "duration_seconds": duration_seconds,
+                        "power_consumed_wh": power_consumed_wh,
+                        "error_message": error_message
+                    }
+
+                    update_parts = []
+                    values = []
+                    for col, val in fields.items():
+                        if val is not None:
+                            update_parts.append(f"{col} = ?")
+                            values.append(val)
+
+                    # Safety: if nothing to update (shouldn't happen because status is required), skip
+                    if update_parts:
+                        values.extend([job_name, namespace])
+                        cursor.execute(
+                            f"""
+                            UPDATE job_results
+                            SET {', '.join(update_parts)}
+                            WHERE job_name = ? AND namespace = ?
+                            """,
+                            values,
+                        )
+                    logger.info("Updated job %s with status %s", job_name, status)
                 else:
                     # Insert new record
                     cursor.execute(
@@ -242,15 +232,15 @@ class JobRepository:
                             error_message,
                         ),
                     )
-                    logger.info(f"Created job {job_name} with status {status}")
+                    logger.info("Created job %s with status %s", job_name, status)
 
             return True
 
         except sqlite3.OperationalError as e:
-            logger.error(f"Database locked or unavailable: {e}")
+            logger.error("Database locked or unavailable: %s", e)
             return False
         except Exception as e:
-            logger.error(f"Failed to save job result: {e}")
+            logger.error("Failed to save job result: %s", e)
             return False
 
     def get_job_result(self, job_name: str, namespace: str) -> Optional[Dict[str, Any]]:
@@ -285,7 +275,7 @@ class JobRepository:
                 return None
 
         except Exception as e:
-            logger.error(f"Error fetching job result: {e}")
+            logger.error("Error fetching job result: %s", e)
             return None
 
     def get_all_job_results(
@@ -320,7 +310,7 @@ class JobRepository:
                 return [dict(row) for row in cursor.fetchall()]
 
         except Exception as e:
-            logger.error(f"Error fetching all job results: {e}")
+            logger.error("Error fetching all job results: %s", e)
             return []
 
     def get_jobs_by_status(self, status: str, limit: int = 100) -> List[Dict[str, Any]]:
@@ -354,7 +344,7 @@ class JobRepository:
                 return [dict(row) for row in cursor.fetchall()]
 
         except Exception as e:
-            logger.error(f"Error fetching jobs by status: {e}")
+            logger.error("Error fetching jobs by status: %s", e)
             return []
 
     def delete_job_result(self, job_name: str, namespace: str) -> bool:
@@ -380,11 +370,11 @@ class JobRepository:
                     (job_name, namespace),
                 )
 
-            logger.info(f"Deleted result for job {job_name} in namespace {namespace}")
+            logger.info("Deleted result for job %s in namespace %s", job_name, namespace)
             return True
 
         except Exception as e:
-            logger.error(f"Error deleting job result: {e}")
+            logger.error("Error deleting job result: %s", e)
             return False
 
     def clear_all_job_results(self) -> tuple[bool, int]:
@@ -411,12 +401,12 @@ class JobRepository:
                 )
 
             logger.warning(
-                f"Cleared all job results from database ({count} records deleted)"
+                "Cleared all job results from database (%d records deleted)", count
             )
             return True, count
 
         except Exception as e:
-            logger.error(f"Error clearing all job results: {e}")
+            logger.error("Error clearing all job results: %s", e)
             return False, 0
 
     def get_job_count(self) -> int:
@@ -433,7 +423,7 @@ class JobRepository:
                 return cursor.fetchone()[0]
 
         except Exception as e:
-            logger.error(f"Error getting job count: {e}")
+            logger.error("Error getting job count: %s", e)
             return 0
 
     def get_statistics(self) -> Dict[str, Any]:
@@ -482,7 +472,7 @@ class JobRepository:
                 }
 
         except Exception as e:
-            logger.error(f"Error getting statistics: {e}")
+            logger.error("Error getting statistics: %s", e)
             return {
                 "total_jobs": 0,
                 "status_counts": {},

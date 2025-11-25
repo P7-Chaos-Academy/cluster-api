@@ -108,6 +108,9 @@ job_history_model = api.model(
         "power_consumed_wh": fields.Float(
             description="Power consumed in watt-hours", example=0.0524
         ),
+        "token_count": fields.Integer(
+            description="Number of tokens generated", example=128
+        ),
         "error_message": fields.String(
             description="Error message if job failed", example=None
         ),

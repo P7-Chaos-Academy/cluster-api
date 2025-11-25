@@ -66,6 +66,7 @@ class JobRepository:
                         completed_at TIMESTAMP,
                         duration_seconds REAL,
                         power_consumed_wh REAL,
+                        token_count INTEGER,
                         error_message TEXT,
                         UNIQUE(job_name, namespace)
                     )
@@ -90,6 +91,11 @@ class JobRepository:
                     
                 try:
                     cursor.execute("ALTER TABLE job_results ADD COLUMN power_consumed_wh REAL")
+                except sqlite3.OperationalError:
+                    pass
+                    
+                try:
+                    cursor.execute("ALTER TABLE job_results ADD COLUMN token_count INTEGER")
                 except sqlite3.OperationalError:
                     pass
 
@@ -134,6 +140,7 @@ class JobRepository:
         completed_at: Optional[str] = None,
         duration_seconds: Optional[float] = None,
         power_consumed_wh: Optional[float] = None,
+        token_count: Optional[int] = None,
         error_message: Optional[str] = None,
     ) -> bool:
         """
@@ -158,6 +165,7 @@ class JobRepository:
             completed_at: Optional timestamp when job completed
             duration_seconds: Optional job duration in seconds
             power_consumed_wh: Optional power consumed in watt-hours
+            token_count: Optional number of tokens generated
             error_message: Optional error message if job failed
 
         Returns:
@@ -186,6 +194,7 @@ class JobRepository:
                         "completed_at": completed_at,
                         "duration_seconds": duration_seconds,
                         "power_consumed_wh": power_consumed_wh,
+                        "token_count": token_count,
                         "error_message": error_message
                     }
 
@@ -214,8 +223,8 @@ class JobRepository:
                         """
                         INSERT INTO job_results 
                         (job_name, namespace, pod_name, node_name, status, prompt, result, 
-                         started_at, completed_at, duration_seconds, power_consumed_wh, error_message)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         started_at, completed_at, duration_seconds, power_consumed_wh, token_count, error_message)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             job_name,
@@ -229,6 +238,7 @@ class JobRepository:
                             completed_at,
                             duration_seconds,
                             power_consumed_wh,
+                            token_count,
                             error_message,
                         ),
                     )
@@ -441,15 +451,15 @@ class JobRepository:
                 cursor.execute("SELECT COUNT(*) FROM job_results WHERE node_name = ?", (node_name,))
                 total = cursor.fetchone()[0]
 
-                # Calculate average time per token
+                # Calculate average time per token using the token_count field
                 cursor.execute(
                     """
-                    SELECT AVG(duration_seconds / CAST(result AS REAL)) as avg_seconds_per_token
+                    SELECT AVG(duration_seconds / token_count) as avg_seconds_per_token
                     FROM job_results
                     WHERE node_name = ? 
-                    AND result IS NOT NULL 
+                    AND token_count IS NOT NULL 
                     AND duration_seconds IS NOT NULL
-                    AND CAST(result AS REAL) > 0
+                    AND token_count > 0
                 """,
                     (node_name,),
                 )
@@ -464,8 +474,8 @@ class JobRepository:
         except Exception as e:
             logger.error("Error getting statistics: %s", e)
             return {
-                "total_jobs": 0,
-                "avg_seconds_per_token": 0,
+            "total_jobs": 0,
+            "avg_seconds_per_token": 0,
             }
 
 

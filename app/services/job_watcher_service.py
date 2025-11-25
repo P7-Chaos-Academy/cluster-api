@@ -100,10 +100,9 @@ class JobWatcherService:
         error_message: Optional[str] = None,
     ):
         """Save job result using the repository."""
-        # Extract prompt, result, and token count from logs if available
+        # Extract prompt and result from logs if available
         prompt = None
         result = None
-        token_count = None
         if logs:
             try:
                 # Clean up curl output first
@@ -113,10 +112,6 @@ class JobWatcherService:
                 log_json = json.loads(clean_logs)
                 result = log_json.get("content", "").strip()
                 prompt = log_json.get("prompt", None)
-                
-                # Extract token count from timings if available
-                timings = log_json.get("timings", {})
-                token_count = timings.get("predicted_n") or timings.get("predicted_tokens")
 
                 # If result is empty, fall back to full JSON
                 if not result:
@@ -166,7 +161,6 @@ class JobWatcherService:
             completed_at=completed_at,
             duration_seconds=duration_seconds,
             power_consumed_wh=power_consumed_wh,
-            token_count=token_count,
             error_message=error_message,
         )
 

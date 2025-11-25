@@ -148,7 +148,7 @@ class JobWatcherService:
             except Exception as e:
                 logger.error(f"Failed to calculate duration/power for {job_name}: {e}")
 
-        # Use repository to save
+        # Use repository to save (token_count not passed, preserves initial value from job creation)
         self.repository.save_job_result(
             job_name=job_name,
             namespace=namespace,

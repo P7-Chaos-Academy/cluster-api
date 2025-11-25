@@ -272,7 +272,7 @@ class JobRepository:
                     """
                     SELECT id, job_name, namespace, pod_name, node_name, status, 
                            prompt, result, created_at, started_at, completed_at, 
-                           duration_seconds, power_consumed_wh, error_message
+                           duration_seconds, power_consumed_wh, token_count, error_message
                     FROM job_results
                     WHERE job_name = ? AND namespace = ?
                 """,
@@ -309,7 +309,7 @@ class JobRepository:
                     """
                     SELECT id, job_name, namespace, pod_name, node_name, status, 
                            prompt, result, created_at, started_at, completed_at, 
-                           duration_seconds, power_consumed_wh, error_message
+                           duration_seconds, power_consumed_wh, token_count, error_message
                     FROM job_results
                     ORDER BY completed_at DESC
                     LIMIT ? OFFSET ?

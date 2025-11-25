@@ -426,7 +426,7 @@ class JobRepository:
             logger.error("Error getting job count: %s", e)
             return 0
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self, node_name: str) -> Dict[str, Any]:
         """
         Get database statistics.
 
@@ -437,46 +437,35 @@ class JobRepository:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
 
-                # Total count
-                cursor.execute("SELECT COUNT(*) FROM job_results")
+                # Total count of jobs for this node
+                cursor.execute("SELECT COUNT(*) FROM job_results WHERE node_name = ?", (node_name,))
                 total = cursor.fetchone()[0]
 
-                # Count by status
+                # Calculate average time per token
                 cursor.execute(
                     """
-                    SELECT status, COUNT(*) as count
+                    SELECT AVG(duration_seconds / CAST(result AS REAL)) as avg_seconds_per_token
                     FROM job_results
-                    GROUP BY status
-                """
+                    WHERE node_name = ? 
+                    AND result IS NOT NULL 
+                    AND duration_seconds IS NOT NULL
+                    AND CAST(result AS REAL) > 0
+                """,
+                    (node_name,),
                 )
-                status_counts = {
-                    row["status"]: row["count"] for row in cursor.fetchall()
-                }
-
-                # Most recent job
-                cursor.execute(
-                    """
-                    SELECT completed_at
-                    FROM job_results
-                    ORDER BY completed_at DESC
-                    LIMIT 1
-                """
-                )
-                recent = cursor.fetchone()
-                most_recent = recent["completed_at"] if recent else None
+                row = cursor.fetchone()
+                avg_seconds_per_token = row[0] if row and row[0] is not None else 0
 
                 return {
                     "total_jobs": total,
-                    "status_counts": status_counts,
-                    "most_recent_completion": most_recent,
+                    "avg_seconds_per_token": avg_seconds_per_token,
                 }
 
         except Exception as e:
             logger.error("Error getting statistics: %s", e)
             return {
                 "total_jobs": 0,
-                "status_counts": {},
-                "most_recent_completion": None,
+                "avg_seconds_per_token": 0,
             }
 
 

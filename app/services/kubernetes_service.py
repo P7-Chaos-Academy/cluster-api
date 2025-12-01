@@ -134,6 +134,7 @@ class KubernetesService:
                 namespace=response.metadata.namespace,
                 status="pending",  # Initial status
                 prompt=job_request.prompt,
+                token_count=job_request.n_predict,
                 # Other fields will be populated when job completes
             )
             logger.info(f"Recorded job {job_request.name} in database with status 'pending'")

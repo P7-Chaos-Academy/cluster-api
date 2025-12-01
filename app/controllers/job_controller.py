@@ -108,6 +108,9 @@ job_history_model = api.model(
         "power_consumed_wh": fields.Float(
             description="Power consumed in watt-hours", example=0.0524
         ),
+        "token_count": fields.Integer(
+            description="Number of tokens generated", example=128
+        ),
         "error_message": fields.String(
             description="Error message if job failed", example=None
         ),
@@ -217,17 +220,17 @@ class JobHistoryDetail(Resource):
             api.abort(500, error=str(e))
 
 
-@api.route("/history/stats")
+@api.route("/history/stats/<string:node_name>")
 class JobStatistics(Resource):
     """Job statistics operations."""
 
     @api.doc("get_job_statistics")
     @api.response(200, "Success")
     @api.response(500, "Internal server error", error_model)
-    def get(self):
+    def get(self, node_name):
         """Get database statistics about job results."""
         try:
-            stats = job_repository.get_statistics()
+            stats = job_repository.get_statistics(node_name)
             return stats, 200
 
         except Exception as e:

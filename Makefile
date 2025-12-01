@@ -44,6 +44,8 @@ docker-push: docker-build
 docker-push-dev:
 	docker build -t $(IMAGE_NAME):$(DEV_TAG) .
 	docker push $(IMAGE_NAME):$(DEV_TAG)
+	sed -i "s|image: cgamel/cluster-api:.*|image: $(IMAGE_NAME):$(DEV_TAG)|g" ../gitops/cluster/cluster-deployment.yaml
+	kubectl apply -f ../gitops/cluster/cluster-deployment.yaml
 	@echo "$(IMAGE_NAME):$(DEV_TAG)"
 
 docker-run:  ## Run Docker container locally

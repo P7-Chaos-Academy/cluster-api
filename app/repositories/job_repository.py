@@ -501,6 +501,7 @@ class JobRepository:
                 )
                 
                 row = cursor.fetchone()
+                logger.info("Node speed query result for %s: %s", node_name, row)
                 if row and row[0] is not None:
                     return float(row[0])
                 return None

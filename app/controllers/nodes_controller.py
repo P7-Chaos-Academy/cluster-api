@@ -14,7 +14,7 @@ api = Namespace('nodes', description='GPIO node operations')
 
 node_response_model = api.model('NodeResponse', {
     'status': fields.String(description='Operation status', example='ok'),
-    'pin': fields.Integer(description='GPIO pin that was activated', example=17)
+    'tokens_per_second': fields.Float(description='Speed of the node in tokens per second', example=17.5)
 })
 
 error_model = api.model('NodeError', {

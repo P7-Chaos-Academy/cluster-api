@@ -10,6 +10,8 @@ from kubernetes.client.rest import ApiException
 from app.config.config import get_config
 from app.repositories.job_repository import job_repository
 from app.services.prometheus_service import prometheus_service
+from app.services.kubernetes_service import kubernetes_service
+from app.services.node_service import node_service
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,8 @@ class JobWatcherService:
         self.polling_thread = None
         self.should_stop = False
         self.repository = job_repository
+        self.kubernetes_service = kubernetes_service
+        self.node_service = node_service
 
     def _parse_curl_output(self, logs: str) -> Optional[str]:
         """Parse curl output to extract JSON response, removing progress lines."""
@@ -105,7 +109,6 @@ class JobWatcherService:
         result = None
         if logs:
             try:
-                # Clean up curl output first
                 clean_logs = self._parse_curl_output(logs)
 
                 # Parse JSON response from llama.cpp
@@ -113,12 +116,10 @@ class JobWatcherService:
                 result = log_json.get("content", "").strip()
                 prompt = log_json.get("prompt", None)
 
-                # If result is empty, fall back to full JSON
                 if not result:
                     result = clean_logs
 
             except json.JSONDecodeError:
-                # If JSON parsing fails, try to clean curl output anyway
                 result = self._parse_curl_output(logs) or logs
 
         # Get pod information (node, timestamps)
@@ -332,6 +333,7 @@ class JobWatcherService:
                 event_type = event["type"]
                 job = event["object"]
                 job_name = job.metadata.name
+                node_name = job.spec.template.spec.node_name
 
                 logger.debug(f"Job event: {event_type} - {job_name}")
 
@@ -352,6 +354,10 @@ class JobWatcherService:
                         status="succeeded",
                         logs=logs,
                     )
+                    node_speed = self.node_service.get_node_speed(node_name)
+                    logger.info(f"Node '{node_name}' speed: {node_speed} tokens/second")
+
+                    self.kubernetes_service.node_annotator(node_name, "tokens-per-second", str(node_speed))
 
                 elif status.failed and status.failed > 0:
                     logger.info(f"Job {job_name} failed")

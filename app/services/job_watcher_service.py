@@ -357,7 +357,7 @@ class JobWatcherService:
                     
                     try:
                         _, node_name, _, _ = self._get_pod_info(job_name, namespace)
-                        if node_name and node_name != "None":
+                        if node_name is not None and node_name != "None" and node_name != "":
                             node_speed = self.node_service.get_node_speed(node_name)
                             logger.info(f"Node '{node_name}' speed: {node_speed} tokens/second")
                             self.kubernetes_service.node_annotator(node_name, "tokens-per-second", str(node_speed))

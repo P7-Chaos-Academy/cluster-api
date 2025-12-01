@@ -6,6 +6,7 @@ from flask_restx import Namespace, Resource, fields
 from app.config.config import get_config
 from app.services.gpio_service import gpio_service
 from app.services.shutdown_service import shutdown_service
+from app.services.node_service import node_service
 
 logger = logging.getLogger(__name__)
 config = get_config()
@@ -67,3 +68,24 @@ class NodeShutdown(Resource):
         except Exception as err:
             logger.exception("Failed to shutdown server at %s: %s", host, err)
             api.abort(500, error='Failed to shutdown server')
+
+@api.route('/node-speed/<string:node_name>')
+class NodeSpeed(Resource):
+    """Controller for retrieving node speed information."""
+
+    @api.doc('get_node_speed', description='Get the speed of a specified node')
+    @api.marshal_with(node_response_model)
+    @api.response(200, 'Node speed retrieved', node_response_model)
+    @api.response(400, 'Invalid request', error_model)
+    @api.response(500, 'Internal server error', error_model)
+    def get(self, node_name: str):
+        """Retrieve the speed of the specified node."""
+        try:
+            speed = node_service.get_node_speed(node_name)
+            return {'status': 'ok', 'tokens_per_second': speed}
+        except ValueError as err:
+            logger.error("Invalid node speed request: %s", err)
+            api.abort(400, error=str(err))
+        except Exception as err:
+            logger.exception("Failed to retrieve speed for node %s: %s", node_name, err)
+            api.abort(500, error='Failed to retrieve node speed')

@@ -477,6 +477,37 @@ class JobRepository:
             "total_jobs": 0,
             "avg_seconds_per_token": 0,
             }
+        
+    def get_node_speed(self, node_name: str) -> Optional[float]:
+        """
+        Calculate the average processing speed (tokens per second) for a given node.
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Calculate average tokens per second from completed jobs
+                cursor.execute(
+                    """
+                    SELECT AVG(token_count / duration_seconds) as tokens_per_second
+                    FROM job_results
+                    WHERE node_name = ? 
+                    AND token_count IS NOT NULL 
+                    AND duration_seconds IS NOT NULL
+                    AND duration_seconds > 0
+                    AND status = 'succeeded'
+                    """,
+                    (node_name,),
+                )
+                
+                row = cursor.fetchone()
+                if row and row[0] is not None:
+                    return float(row[0])
+                return None
+                
+        except Exception as e:
+            logger.error("Error calculating node speed for %s: %s", node_name, e)
+            return None
 
 
 # Global repository instance

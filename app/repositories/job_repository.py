@@ -183,7 +183,6 @@ class JobRepository:
                 existing = cursor.fetchone()
                 
                 if existing:
-                    # Build update dynamically from a mapping to keep code concise
                     fields = {
                         "status": status,
                         "prompt": prompt,

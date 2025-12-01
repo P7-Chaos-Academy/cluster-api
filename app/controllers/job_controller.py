@@ -86,13 +86,30 @@ job_history_model = api.model(
         "id": fields.Integer(description="Database ID", example=1),
         "job_name": fields.String(description="Job name", example="llama-job-abc123"),
         "namespace": fields.String(description="Namespace", example="prompts"),
+        "pod_name": fields.String(description="Pod name", example="llama-job-abc123-xyz12"),
+        "node_name": fields.String(description="Node where job ran", example="nano1"),
         "status": fields.String(description="Job status", example="succeeded"),
         "prompt": fields.String(description="Input prompt", example="Hello world!"),
         "result": fields.String(
             description="LLM response", example="Hello! How can I help you?"
         ),
+        "created_at": fields.String(
+            description="Job creation timestamp", example="2025-11-03T12:00:00Z"
+        ),
+        "started_at": fields.String(
+            description="Container start timestamp", example="2025-11-03T12:00:05Z"
+        ),
         "completed_at": fields.String(
-            description="Completion timestamp", example="2025-11-03T12:00:00Z"
+            description="Container completion timestamp", example="2025-11-03T12:00:23Z"
+        ),
+        "duration_seconds": fields.Float(
+            description="Job duration in seconds", example=18.5
+        ),
+        "power_consumed_wh": fields.Float(
+            description="Power consumed in watt-hours", example=0.0524
+        ),
+        "error_message": fields.String(
+            description="Error message if job failed", example=None
         ),
     },
 )

@@ -19,6 +19,12 @@ class Config:
     DATABASE_PATH = os.getenv("DATABASE_PATH", "/app/data/cluster.db")
     DATABASE_DIR = os.path.dirname(DATABASE_PATH) if DATABASE_PATH else "/app/data"
 
+    # Prometheus settings
+    PROMETHEUS_URL = os.getenv(
+        "PROMETHEUS_URL", 
+        "http://prometheus.monitoring.svc.cluster.local:8000"
+    )
+
     # Logging settings
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 

@@ -57,16 +57,41 @@ class JobRepository:
                         job_name TEXT NOT NULL,
                         namespace TEXT NOT NULL,
                         pod_name TEXT,
+                        node_name TEXT,
                         status TEXT NOT NULL,
                         prompt TEXT,
                         result TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        started_at TIMESTAMP,
                         completed_at TIMESTAMP,
+                        duration_seconds REAL,
+                        power_consumed_wh REAL,
                         error_message TEXT,
                         UNIQUE(job_name, namespace)
                     )
                 """
                 )
+                
+                # Add new columns if they don't exist (for existing databases)
+                try:
+                    cursor.execute("ALTER TABLE job_results ADD COLUMN node_name TEXT")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+                    
+                try:
+                    cursor.execute("ALTER TABLE job_results ADD COLUMN started_at TIMESTAMP")
+                except sqlite3.OperationalError:
+                    pass
+                    
+                try:
+                    cursor.execute("ALTER TABLE job_results ADD COLUMN duration_seconds REAL")
+                except sqlite3.OperationalError:
+                    pass
+                    
+                try:
+                    cursor.execute("ALTER TABLE job_results ADD COLUMN power_consumed_wh REAL")
+                except sqlite3.OperationalError:
+                    pass
 
                 # Create indexes for faster queries
                 cursor.execute(
@@ -90,10 +115,10 @@ class JobRepository:
                 """
                 )
 
-            logger.info(f"Database initialized successfully at {self.db_path}")
+            logger.info("Database initialized successfully at %s", self.db_path)
 
         except Exception as e:
-            logger.error(f"Failed to initialize database: {e}")
+            logger.error("Failed to initialize database: %s", e)
             raise
 
     def save_job_result(
@@ -104,18 +129,35 @@ class JobRepository:
         prompt: Optional[str] = None,
         result: Optional[str] = None,
         pod_name: Optional[str] = None,
+        node_name: Optional[str] = None,
+        started_at: Optional[str] = None,
+        completed_at: Optional[str] = None,
+        duration_seconds: Optional[float] = None,
+        power_consumed_wh: Optional[float] = None,
         error_message: Optional[str] = None,
     ) -> bool:
         """
         Save or update a job result.
+        
+        Uses INSERT OR REPLACE which will:
+        - Insert a new row if job doesn't exist
+        - Update existing row if job exists (based on UNIQUE constraint on job_name, namespace)
+        
+        Note: When updating, only provided (non-None) values will overwrite existing data.
+        The created_at timestamp is preserved on updates.
 
         Args:
             job_name: Name of the Kubernetes job
             namespace: Kubernetes namespace
-            status: Job status (succeeded, failed, etc.)
+            status: Job status (pending, running, succeeded, failed, etc.)
             prompt: Optional prompt text sent to the job
             result: Optional result/output from the job
             pod_name: Optional pod name
+            node_name: Optional name of node where job ran
+            started_at: Optional timestamp when job started
+            completed_at: Optional timestamp when job completed
+            duration_seconds: Optional job duration in seconds
+            power_consumed_wh: Optional power consumed in watt-hours
             error_message: Optional error message if job failed
 
         Returns:
@@ -124,34 +166,80 @@ class JobRepository:
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
-
+                
+                # Check if job already exists to decide between INSERT and UPDATE
                 cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO job_results 
-                    (job_name, namespace, pod_name, status, prompt, result, 
-                     completed_at, error_message)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    (
-                        job_name,
-                        namespace,
-                        pod_name,
-                        status,
-                        prompt,
-                        result,
-                        datetime.now().isoformat(),
-                        error_message,
-                    ),
+                    "SELECT id, created_at FROM job_results WHERE job_name = ? AND namespace = ?",
+                    (job_name, namespace)
                 )
+                existing = cursor.fetchone()
+                
+                if existing:
+                    fields = {
+                        "status": status,
+                        "prompt": prompt,
+                        "result": result,
+                        "pod_name": pod_name,
+                        "node_name": node_name,
+                        "started_at": started_at,
+                        "completed_at": completed_at,
+                        "duration_seconds": duration_seconds,
+                        "power_consumed_wh": power_consumed_wh,
+                        "error_message": error_message
+                    }
 
-            logger.info(f"Saved result for job {job_name} with status {status}")
+                    update_parts = []
+                    values = []
+                    for col, val in fields.items():
+                        if val is not None:
+                            update_parts.append(f"{col} = ?")
+                            values.append(val)
+
+                    # Safety: if nothing to update (shouldn't happen because status is required), skip
+                    if update_parts:
+                        values.extend([job_name, namespace])
+                        cursor.execute(
+                            f"""
+                            UPDATE job_results
+                            SET {', '.join(update_parts)}
+                            WHERE job_name = ? AND namespace = ?
+                            """,
+                            values,
+                        )
+                    logger.info("Updated job %s with status %s", job_name, status)
+                else:
+                    # Insert new record
+                    cursor.execute(
+                        """
+                        INSERT INTO job_results 
+                        (job_name, namespace, pod_name, node_name, status, prompt, result, 
+                         started_at, completed_at, duration_seconds, power_consumed_wh, error_message)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            job_name,
+                            namespace,
+                            pod_name,
+                            node_name,
+                            status,
+                            prompt,
+                            result,
+                            started_at,
+                            completed_at,
+                            duration_seconds,
+                            power_consumed_wh,
+                            error_message,
+                        ),
+                    )
+                    logger.info("Created job %s with status %s", job_name, status)
+
             return True
 
         except sqlite3.OperationalError as e:
-            logger.error(f"Database locked or unavailable: {e}")
+            logger.error("Database locked or unavailable: %s", e)
             return False
         except Exception as e:
-            logger.error(f"Failed to save job result: {e}")
+            logger.error("Failed to save job result: %s", e)
             return False
 
     def get_job_result(self, job_name: str, namespace: str) -> Optional[Dict[str, Any]]:
@@ -171,8 +259,9 @@ class JobRepository:
 
                 cursor.execute(
                     """
-                    SELECT id, job_name, namespace, pod_name, status, 
-                           prompt, result, created_at, completed_at, error_message
+                    SELECT id, job_name, namespace, pod_name, node_name, status, 
+                           prompt, result, created_at, started_at, completed_at, 
+                           duration_seconds, power_consumed_wh, error_message
                     FROM job_results
                     WHERE job_name = ? AND namespace = ?
                 """,
@@ -185,7 +274,7 @@ class JobRepository:
                 return None
 
         except Exception as e:
-            logger.error(f"Error fetching job result: {e}")
+            logger.error("Error fetching job result: %s", e)
             return None
 
     def get_all_job_results(
@@ -207,8 +296,9 @@ class JobRepository:
 
                 cursor.execute(
                     """
-                    SELECT id, job_name, namespace, pod_name, status, 
-                           prompt, result, created_at, completed_at, error_message
+                    SELECT id, job_name, namespace, pod_name, node_name, status, 
+                           prompt, result, created_at, started_at, completed_at, 
+                           duration_seconds, power_consumed_wh, error_message
                     FROM job_results
                     ORDER BY completed_at DESC
                     LIMIT ? OFFSET ?
@@ -219,7 +309,7 @@ class JobRepository:
                 return [dict(row) for row in cursor.fetchall()]
 
         except Exception as e:
-            logger.error(f"Error fetching all job results: {e}")
+            logger.error("Error fetching all job results: %s", e)
             return []
 
     def get_jobs_by_status(self, status: str, limit: int = 100) -> List[Dict[str, Any]]:
@@ -239,8 +329,9 @@ class JobRepository:
 
                 cursor.execute(
                     """
-                    SELECT id, job_name, namespace, pod_name, status, 
-                           prompt, result, created_at, completed_at, error_message
+                    SELECT id, job_name, namespace, pod_name, node_name, status, 
+                           prompt, result, created_at, started_at, completed_at, 
+                           duration_seconds, power_consumed_wh, error_message
                     FROM job_results
                     WHERE status = ?
                     ORDER BY completed_at DESC
@@ -252,7 +343,7 @@ class JobRepository:
                 return [dict(row) for row in cursor.fetchall()]
 
         except Exception as e:
-            logger.error(f"Error fetching jobs by status: {e}")
+            logger.error("Error fetching jobs by status: %s", e)
             return []
 
     def delete_job_result(self, job_name: str, namespace: str) -> bool:
@@ -278,11 +369,11 @@ class JobRepository:
                     (job_name, namespace),
                 )
 
-            logger.info(f"Deleted result for job {job_name} in namespace {namespace}")
+            logger.info("Deleted result for job %s in namespace %s", job_name, namespace)
             return True
 
         except Exception as e:
-            logger.error(f"Error deleting job result: {e}")
+            logger.error("Error deleting job result: %s", e)
             return False
 
     def clear_all_job_results(self) -> tuple[bool, int]:
@@ -309,12 +400,12 @@ class JobRepository:
                 )
 
             logger.warning(
-                f"Cleared all job results from database ({count} records deleted)"
+                "Cleared all job results from database (%d records deleted)", count
             )
             return True, count
 
         except Exception as e:
-            logger.error(f"Error clearing all job results: {e}")
+            logger.error("Error clearing all job results: %s", e)
             return False, 0
 
     def get_job_count(self) -> int:
@@ -331,7 +422,7 @@ class JobRepository:
                 return cursor.fetchone()[0]
 
         except Exception as e:
-            logger.error(f"Error getting job count: {e}")
+            logger.error("Error getting job count: %s", e)
             return 0
 
     def get_statistics(self) -> Dict[str, Any]:
@@ -380,7 +471,7 @@ class JobRepository:
                 }
 
         except Exception as e:
-            logger.error(f"Error getting statistics: {e}")
+            logger.error("Error getting statistics: %s", e)
             return {
                 "total_jobs": 0,
                 "status_counts": {},

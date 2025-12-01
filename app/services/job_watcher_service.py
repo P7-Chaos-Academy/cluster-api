@@ -333,7 +333,7 @@ class JobWatcherService:
                 event_type = event["type"]
                 job = event["object"]
                 job_name = job.metadata.name
-                node_name = job.spec.template.spec.node_name
+                node_name = self._get_pod_info(job_name, namespace)[1]
 
                 logger.debug(f"Job event: {event_type} - {job_name}")
 

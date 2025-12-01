@@ -88,3 +88,27 @@ class NodeSpeed(Resource):
         except Exception as err:
             logger.exception("Failed to retrieve speed for node %s: %s", node_name, err)
             api.abort(500, error='Failed to retrieve node speed')
+
+
+@api.route('/all-node-speeds')
+class AllNodeSpeeds(Resource):
+    """Controller for retrieving speeds of all nodes."""
+
+    @api.doc('get_all_node_speeds', description='Get speeds for all nodes')
+    @api.marshal_with(api.model('AllNodeSpeedsResponse', {
+        'status': fields.String(description='Operation status', example='ok'),
+        'node_speeds': fields.Raw(description='Dictionary of node speeds', example={'nano1': 15.0, 'orin': 20.5})
+    }))
+    @api.response(200, 'All node speeds retrieved', api.model('AllNodeSpeedsResponse', {
+        'status': fields.String(description='Operation status', example='ok'),
+        'node_speeds': fields.Raw(description='Dictionary of node speeds', example={'nano1': 15.0, 'orin': 20.5})
+    }))
+    @api.response(500, 'Internal server error', error_model)
+    def get(self):
+        """Retrieve speeds for all nodes."""
+        try:
+            speeds = node_service.get_all_node_speeds()
+            return {'status': 'ok', 'node_speeds': speeds}
+        except Exception as err:
+            logger.exception("Failed to retrieve all node speeds: %s", err)
+            api.abort(500, error='Failed to retrieve all node speeds')

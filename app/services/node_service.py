@@ -1,4 +1,5 @@
 import logging
+from app.repositories.job_repository import job_repository
 
 
 logger = logging.getLogger(__name__)
@@ -6,7 +7,7 @@ logger = logging.getLogger(__name__)
 class NodeService:
     """Service class for managing cluster nodes."""
 
-    def __init__(self, job_repository):
+    def __init__(self):
         """Initialize the Node service."""
         self.job_repository = job_repository
 
@@ -17,3 +18,6 @@ class NodeService:
             raise ValueError(f"Node '{node_name}' not found")
 
         return node_speed
+    
+
+node_service = NodeService()

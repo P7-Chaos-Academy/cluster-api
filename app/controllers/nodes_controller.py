@@ -7,7 +7,6 @@ from app.config.config import get_config
 from app.services.gpio_service import gpio_service
 from app.services.shutdown_service import shutdown_service
 from app.services.node_service import node_service
-
 logger = logging.getLogger(__name__)
 config = get_config()
 

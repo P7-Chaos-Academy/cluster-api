@@ -354,10 +354,17 @@ class JobWatcherService:
                         status="succeeded",
                         logs=logs,
                     )
-                    node_speed = self.node_service.get_node_speed(node_name)
-                    logger.info(f"Node '{node_name}' speed: {node_speed} tokens/second")
-
-                    self.kubernetes_service.node_annotator(node_name, "tokens-per-second", str(node_speed))
+                    
+                    # Try to update node annotation with speed (may fail due to RBAC)
+                    try:
+                        # Get node name from pod info
+                        _, node_name, _, _ = self._get_pod_info(job_name, namespace)
+                        if node_name:
+                            node_speed = self.node_service.get_node_speed(node_name)
+                            logger.info(f"Node '{node_name}' speed: {node_speed} tokens/second")
+                            self.kubernetes_service.node_annotator(node_name, "tokens-per-second", str(node_speed))
+                    except Exception as e:
+                        logger.warning(f"Failed to update node annotation for {job_name}: {e}")
 
                 elif status.failed and status.failed > 0:
                     logger.info(f"Job {job_name} failed")

@@ -1,5 +1,6 @@
 import logging
 from app.repositories.job_repository import job_repository
+from app.repositories.node_repository import node_repository
 
 
 logger = logging.getLogger(__name__)

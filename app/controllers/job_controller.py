@@ -123,12 +123,12 @@ job_status_item_model = api.model(
     {
         "job_name": fields.String(description="Job name", example="llama-job-abc123"),
         "status": fields.String(
-            description="Job status (finished, failed, enqueued, running, pending)",
+            description="Job status (finished, failed, running, pending)",
             example="running",
-            enum=["finished", "failed", "enqueued", "running", "pending"],
+            enum=["finished", "failed", "running", "pending"],
         ),
         "node_name": fields.String(
-            description="Node where the job is running or queued",
+            description="Node where the job is running",
             example="nano1",
         ),
         "namespace": fields.String(description="Kubernetes namespace", example="prompts"),
@@ -190,12 +190,11 @@ class JobStatusList(Resource):
         """
         Get status for all jobs.
 
-        Returns the current status of all jobs from Kubernetes, Redis queue, and database.
+        Returns the current status of all jobs from Kubernetes.
 
         Status values:
         - **finished**: Job completed successfully
         - **failed**: Job failed
-        - **enqueued**: Job is waiting in the scheduler queue
         - **running**: Job is currently running on a node
         - **pending**: Job created but not yet scheduled
         """

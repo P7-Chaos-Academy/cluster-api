@@ -118,8 +118,8 @@ job_history_model = api.model(
     },
 )
 
-job_status_model = api.model(
-    "JobStatus",
+job_status_item_model = api.model(
+    "JobStatusItem",
     {
         "job_name": fields.String(description="Job name", example="llama-job-abc123"),
         "status": fields.String(
@@ -132,6 +132,16 @@ job_status_model = api.model(
             example="nano1",
         ),
         "namespace": fields.String(description="Kubernetes namespace", example="prompts"),
+    },
+)
+
+job_status_response_model = api.model(
+    "JobStatusResponse",
+    {
+        "jobs": fields.List(
+            fields.Nested(job_status_item_model),
+            description="List of job statuses",
+        ),
     },
 )
 
@@ -174,7 +184,7 @@ class JobStatusList(Resource):
     """Job status operations."""
 
     @api.doc("get_all_job_statuses")
-    @api.marshal_list_with(job_status_model, code=200)
+    @api.marshal_with(job_status_response_model, code=200)
     @api.response(500, "Internal server error", error_model)
     def get(self):
         """
@@ -192,7 +202,7 @@ class JobStatusList(Resource):
         try:
             namespace = request.args.get("namespace", config.DEFAULT_NAMESPACE)
             statuses = job_status_service.get_all_job_statuses(namespace)
-            return statuses, 200
+            return {"jobs": statuses}, 200
 
         except Exception as e:
             logger.error(f"Error getting job statuses: {e}")

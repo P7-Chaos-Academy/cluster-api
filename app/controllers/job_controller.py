@@ -7,6 +7,7 @@ from dataclasses import asdict
 
 from app.models.job import JobCreateRequest
 from app.services.kubernetes_service import kubernetes_service
+from app.services.job_status_service import job_status_service
 from app.repositories.job_repository import job_repository
 from app.config.config import get_config
 
@@ -117,6 +118,23 @@ job_history_model = api.model(
     },
 )
 
+job_status_model = api.model(
+    "JobStatus",
+    {
+        "job_name": fields.String(description="Job name", example="llama-job-abc123"),
+        "status": fields.String(
+            description="Job status (finished, failed, enqueued, running, pending)",
+            example="running",
+            enum=["finished", "failed", "enqueued", "running", "pending"],
+        ),
+        "node_name": fields.String(
+            description="Node where the job is running or queued",
+            example="nano1",
+        ),
+        "namespace": fields.String(description="Kubernetes namespace", example="prompts"),
+    },
+)
+
 
 @api.route("/")
 class JobList(Resource):
@@ -148,6 +166,36 @@ class JobList(Resource):
             api.abort(400, error=str(e))
         except Exception as e:
             logger.error(f"Error creating job: {e}")
+            api.abort(500, error=str(e))
+
+
+@api.route("/status")
+class JobStatusList(Resource):
+    """Job status operations."""
+
+    @api.doc("get_all_job_statuses")
+    @api.marshal_list_with(job_status_model, code=200)
+    @api.response(500, "Internal server error", error_model)
+    def get(self):
+        """
+        Get status for all jobs.
+
+        Returns the current status of all jobs from Kubernetes, Redis queue, and database.
+
+        Status values:
+        - **finished**: Job completed successfully
+        - **failed**: Job failed
+        - **enqueued**: Job is waiting in the scheduler queue
+        - **running**: Job is currently running on a node
+        - **pending**: Job created but not yet scheduled
+        """
+        try:
+            namespace = request.args.get("namespace", config.DEFAULT_NAMESPACE)
+            statuses = job_status_service.get_all_job_statuses(namespace)
+            return statuses, 200
+
+        except Exception as e:
+            logger.error(f"Error getting job statuses: {e}")
             api.abort(500, error=str(e))
 
 

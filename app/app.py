@@ -29,7 +29,7 @@ def create_app():
         version=config.API_VERSION,
         description=config.API_DESCRIPTION,
         doc="/docs/",  # Swagger UI endpoint
-        prefix="/api/v1",
+        prefix="/v1",
     )
 
     # Register namespaces

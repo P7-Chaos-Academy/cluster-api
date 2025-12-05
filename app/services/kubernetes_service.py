@@ -232,6 +232,25 @@ class KubernetesService:
                 )
             logger.error(f"Failed to get logs for job {job_name}: {e}")
             raise Exception(f"Kubernetes API error: {e.reason}")
+        
+    def node_annotator(self, node_name: str, annotation_key: str, annotation_value: str) -> None:
+        """Annotate a Kubernetes node with a given key-value pair."""
+        if not self.core_v1:
+            raise Exception("Kubernetes client not initialized")
+        
+        try:
+            body = {
+                "metadata": {
+                    "annotations": {
+                        annotation_key: annotation_value
+                    }
+                }
+            }
+            self.core_v1.patch_node(name=node_name, body=body)
+            logger.info(f"Annotated node {node_name} with {annotation_key}: {annotation_value}")
+        except ApiException as e:
+            logger.error(f"Failed to annotate node {node_name}: {e}")
+            raise Exception(f"Kubernetes API error: {e.reason}")
 
 
 # Global service instance

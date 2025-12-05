@@ -63,20 +63,9 @@ class JobStatusService:
                 node_name = pod.spec.node_name
                 phase = pod.status.phase
 
-                if phase == "Running":
-                    status = "running"
-                elif phase == "Pending":
-                    status = "pending"
-                elif phase == "Succeeded":
-                    status = "finished"
-                elif phase == "Failed":
-                    status = "failed"
-                else:
-                    status = phase.lower()
-
                 statuses.append({
                     "job_name": job_name,
-                    "status": status,
+                    "status": phase.lower(),
                     "node_name": node_name,
                     "namespace": namespace,
                 })

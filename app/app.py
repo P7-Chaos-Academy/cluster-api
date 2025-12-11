@@ -29,7 +29,7 @@ def create_app():
         version=config.API_VERSION,
         description=config.API_DESCRIPTION,
         doc="/docs/",  # Swagger UI endpoint
-        prefix="/api/v1",
+        prefix="/v1",
     )
 
     # Register namespaces
@@ -47,7 +47,7 @@ def create_app():
 
     # Health check endpoint
     @app.route("/")
-    @app.route("/health")
+    @app.route("/v1/health")
     def health_check():
         """Health check endpoint."""
         return {

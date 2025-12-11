@@ -47,7 +47,7 @@ def create_app():
 
     # Health check endpoint
     @app.route("/")
-    @app.route("/health")
+    @app.route("/v1/health")
     def health_check():
         """Health check endpoint."""
         return {

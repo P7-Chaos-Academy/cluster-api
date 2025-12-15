@@ -6,4 +6,8 @@
 sudo docker build -t cgamel/cluster-api:unique-tag .
 ```
 
-## Push
+## Testing
+
+```
+python -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-branch
+```

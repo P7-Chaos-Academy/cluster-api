@@ -106,8 +106,10 @@ class GPIOService:
         backend_initializers = []
 
         if lgpio:
+            logger.info("lgpio module detected.")
             backend_initializers.append(self._initialize_lgpio)
         if RPi_GPIO:
+            logger.info("RPi.GPIO module detected.")
             backend_initializers.append(self._initialize_rpi_gpio)
 
         for initializer in backend_initializers:

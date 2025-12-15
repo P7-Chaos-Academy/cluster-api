@@ -5,11 +5,6 @@ from threading import Lock
 from typing import Optional, Protocol
 
 try:
-    import RPi.GPIO as RPi_GPIO  # type: ignore
-except (RuntimeError, ModuleNotFoundError):
-    RPi_GPIO = None
-
-try:
     import lgpio  # type: ignore
 except ModuleNotFoundError:
     lgpio = None
@@ -27,36 +22,6 @@ class GPIOBackend(Protocol):
 
     def pulse_pin(self, pin: int, pulse_seconds: float) -> None:
         """Drive a pin high for a short duration before returning it low."""
-
-
-class RPIGPIOBackend:
-    """Adapter around the legacy RPi.GPIO library."""
-
-    name = "RPi.GPIO"
-
-    def __init__(self, module) -> None:
-        self._gpio = module
-        self._initialized = set()
-        self._configure()
-
-    def _configure(self) -> None:
-        """Configure the GPIO library for BCM numbering."""
-        try:
-            self._gpio.setmode(self._gpio.BCM)
-            self._gpio.setwarnings(False)
-        except RuntimeError as err:
-            raise RuntimeError(f"RPi.GPIO initialization failed: {err}") from err
-
-    def setup_pin(self, pin: int) -> None:
-        if pin not in self._initialized:
-            self._gpio.setup(pin, self._gpio.OUT, initial=self._gpio.LOW)
-            self._initialized.add(pin)
-
-    def pulse_pin(self, pin: int, pulse_seconds: float) -> None:
-        self._gpio.output(pin, self._gpio.HIGH)
-        time.sleep(pulse_seconds)
-        self._gpio.output(pin, self._gpio.LOW)
-
 
 class LGPIOBackend:
     """Adapter around libgpiod via the lgpio Python bindings."""
@@ -102,26 +67,15 @@ class GPIOService:
             logger.info("Using %s backend for GPIO operations.", self._backend.name)
 
     def _initialize_backend(self) -> Optional[GPIOBackend]:
-        """Select the first GPIO backend that can be successfully initialized."""
-        backend_initializers = []
+        """Initialize the lgpio backend if available."""
+        if not lgpio:
+            return None
 
-        if lgpio:
-            logger.info("lgpio module detected.")
-            backend_initializers.append(self._initialize_lgpio)
-        if RPi_GPIO:
-            logger.info("RPi.GPIO module detected.")
-            backend_initializers.append(self._initialize_rpi_gpio)
-
-        for initializer in backend_initializers:
-            try:
-                return initializer()
-            except RuntimeError as err:
-                logger.warning("%s", err)
-
-        return None
-
-    def _initialize_rpi_gpio(self) -> GPIOBackend:
-        return RPIGPIOBackend(RPi_GPIO)
+        try:
+            return self._initialize_lgpio()
+        except RuntimeError as err:
+            logger.warning("%s", err)
+            return None
 
     def _initialize_lgpio(self) -> GPIOBackend:
         return LGPIOBackend(lgpio)
